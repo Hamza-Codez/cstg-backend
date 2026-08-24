@@ -2,13 +2,14 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_principal, get_db
+from app.api.deps import get_current_principal, get_db, get_storage
 from app.core.authorization import Principal, require_roles
 from app.core.pagination import InvalidCursor, decode_cursor
+from app.core.storage import StorageBackend
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.domain.errors import ValidationError
 from app.models.enums import Priority as TicketPriority
@@ -189,9 +190,10 @@ async def get_comment_service(session: Annotated[AsyncSession, Depends(get_db)])
 
 async def get_attachment_service(
     session: Annotated[AsyncSession, Depends(get_db)],
+    storage: Annotated[StorageBackend, Depends(get_storage)],
 ) -> AttachmentService:
     uow = SqlAlchemyUnitOfWork(session)
-    return AttachmentService(uow)
+    return AttachmentService(uow, storage)
 
 
 @router.post(
@@ -229,9 +231,12 @@ async def list_comments(
     "/{ticket_id}/attachments",
     response_model=AttachmentResponse,
     status_code=status.HTTP_201_CREATED,
-    # Staff author comments and upload files; customers do neither in v1
-    # (AUTHORIZATION.md §3).
-    dependencies=[Depends(require_roles(Role.AGENT, Role.DISPATCHER, Role.ADMIN))],
+    # P14: customers may upload to their own tickets — AUTHORIZATION.md §3
+    # previously marked this "v2". The coarse gate admits every role; the
+    # object-level gate in the service decides which ticket (INV-12).
+    dependencies=[
+        Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))
+    ],
 )
 async def upload_attachment(
     ticket_id: uuid.UUID,
@@ -245,6 +250,26 @@ async def upload_attachment(
 
 
 @router.get(
+    "/{ticket_id}/attachments",
+    response_model=dict[str, list[AttachmentResponse]],
+)
+async def list_attachments(
+    ticket_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    service: Annotated[AttachmentService, Depends(get_attachment_service)],
+) -> dict[str, list[AttachmentResponse]]:
+    """Attachments on a ticket (docs/API.md §8).
+
+    Not paginated — the per-ticket cap bounds the list.
+    """
+    async with service.uow:
+        attachments = await service.list_attachments(principal, ticket_id)
+    return {
+        "items": [AttachmentResponse.model_validate(a, from_attributes=True) for a in attachments]
+    }
+
+
+@router.get(
     "/{ticket_id}/attachments/{attachment_id}",
 )
 async def download_attachment(
@@ -252,12 +277,25 @@ async def download_attachment(
     attachment_id: uuid.UUID,
     principal: Annotated[Principal, Depends(get_current_principal)],
     service: Annotated[AttachmentService, Depends(get_attachment_service)],
-) -> FileResponse:
+) -> StreamingResponse:
+    """Stream the stored bytes.
+
+    StreamingResponse over the storage port rather than FileResponse over a
+    path: the port's contract is an opaque key, and a backend need not have a
+    filesystem for this route to work.
+    """
     async with service.uow:
         attachment = await service.get_attachment(principal, ticket_id, attachment_id)
 
-    return FileResponse(
-        path=attachment.storage_path,
-        filename=attachment.filename,
+    stream = await service.open_attachment(attachment)
+    return StreamingResponse(
+        stream,
         media_type=attachment.content_type,
+        headers={
+            # Always an attachment, never inline: the declared content type is
+            # not verified against the bytes (spec03 §6), so nothing here may
+            # render in the browser's origin.
+            "Content-Disposition": f'attachment; filename="{attachment.filename}"',
+            "Content-Length": str(attachment.size),
+        },
     )

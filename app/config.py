@@ -64,7 +64,19 @@ class Settings(BaseSettings):
         return self
 
     # Attachment limits (docs/API.md §8 requires max size + allowed content types).
+    # Storage backend for attachment bytes (spec03 §3). ``local`` writes under
+    # ``storage_root``; ``memory`` is for tests.
+    #
+    # DEPLOYMENT: ``local`` loses every object on redeploy where the filesystem
+    # is ephemeral (IMPLEMENTATION_V2.md R14). Production needs a persistent
+    # volume mounted at ``storage_root``, or an object-storage backend.
+    storage_backend: Literal["local", "memory"] = "local"
+    storage_root: str = "."
+
     attachment_max_bytes: int = 10 * 1024 * 1024
+    # Without a count cap, "customers may upload" is an unbounded disk write for
+    # any authenticated account (spec03 §6).
+    attachment_max_per_ticket: int = 20
     attachment_allowed_content_types: tuple[str, ...] = (
         "image/png",
         "image/jpeg",

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.authorization import Principal
 from app.core.security import decode_access_token
+from app.core.storage import StorageBackend, build_storage
 from app.domain.errors import Unauthenticated
 from app.models.enums import ActorType, Role
 from app.repositories.customer_repo import CustomerRepository
@@ -82,3 +83,18 @@ async def get_current_principal(
 
     request.state.principal = principal
     return principal
+
+
+def get_storage(request: Request) -> StorageBackend:
+    """The configured storage backend (spec03 §3).
+
+    Built once per process and held on app state, so LocalStorage resolves its
+    root a single time and MemoryStorage keeps one dict for the app's lifetime
+    rather than one per request.
+    """
+    storage: StorageBackend | None = getattr(request.app.state, "storage", None)
+    if storage is None:
+        settings = request.app.state.settings
+        storage = build_storage(settings.storage_backend, settings.storage_root)
+        request.app.state.storage = storage
+    return storage
