@@ -46,6 +46,9 @@ class EventType(StrEnum):
     ASSIGNMENT = "ASSIGNMENT"
     COMMENT = "COMMENT"
     SLA_BREACH = "SLA_BREACH"
+    # P14: attachment upload was the one state change with no audit record,
+    # so INV-5 did not hold for it. Added by migration 0010.
+    ATTACHMENT = "ATTACHMENT"
 
 
 class ActorType(StrEnum):
