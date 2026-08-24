@@ -218,3 +218,29 @@ async def test_transition_guard_fails(client: AsyncClient, db_session: AsyncSess
     )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "BUSINESS_RULE_VIOLATION"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_create_ticket_idempotency(client: AsyncClient, db_session: AsyncSession) -> None:
+    customer = await create_customer(db_session, "idempotent@example.com")
+    await seed_priority_rules(db_session)
+    token = await get_auth_token(client, customer.email)
+
+    key = str(uuid.uuid4())
+    payload = {"subject": "Idempotent Ticket", "body": "My issue", "category": "GENERAL"}
+    headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": key}
+
+    resp1 = await client.post("/api/v1/tickets", json=payload, headers=headers)
+    assert resp1.status_code == 201
+    ticket_id_1 = resp1.json()["id"]
+
+    resp2 = await client.post("/api/v1/tickets", json=payload, headers=headers)
+    assert resp2.status_code == 201
+    ticket_id_2 = resp2.json()["id"]
+
+    assert ticket_id_1 == ticket_id_2
+    assert resp1.json() == resp2.json()
+
+    result = await db_session.execute(select(Ticket).where(Ticket.subject == "Idempotent Ticket"))
+    assert len(result.scalars().all()) == 1

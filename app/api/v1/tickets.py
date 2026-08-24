@@ -1,9 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Query, UploadFile, status, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.api.deps import get_current_principal, get_db
 from app.core.authorization import Principal, require_roles
@@ -28,6 +29,7 @@ from app.services.assignment_service import AssignmentService
 from app.services.attachment_service import AttachmentService
 from app.services.comment_service import CommentService
 from app.services.ticket_service import TicketService
+from app.models.idempotency import IdempotencyKey
 
 router = APIRouter(
     prefix="/tickets", tags=["Tickets"], dependencies=[Depends(get_current_principal)]
@@ -45,7 +47,6 @@ async def get_assignment_service(
     uow = SqlAlchemyUnitOfWork(session)
     return AssignmentService(uow)
 
-
 @router.post(
     "",
     response_model=TicketResponse,
@@ -56,10 +57,32 @@ async def create_ticket(
     data: TicketCreate,
     principal: Annotated[Principal, Depends(get_current_principal)],
     service: Annotated[TicketService, Depends(get_ticket_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> TicketResponse:
+    if idempotency_key:
+        stmt = select(IdempotencyKey).where(
+            IdempotencyKey.principal_id == principal.id,
+            IdempotencyKey.key == idempotency_key
+        )
+        existing = (await db.execute(stmt)).scalar_one_or_none()
+        if existing:
+            return TicketResponse.model_validate(existing.response_body)
+
     async with service.uow:
         ticket = await service.create_ticket(principal, data)
-    return TicketResponse.model_validate(ticket, from_attributes=True)
+        await db.flush()
+        await db.refresh(ticket)
+        resp = TicketResponse.model_validate(ticket, from_attributes=True)
+        if idempotency_key:
+            key_record = IdempotencyKey(
+                principal_id=principal.id,
+                key=idempotency_key,
+                response_body=resp.model_dump(mode="json"),
+                status_code=201
+            )
+            db.add(key_record)
+    return resp
 
 
 @router.get(
