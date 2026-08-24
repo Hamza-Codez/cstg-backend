@@ -148,19 +148,28 @@ async def test_agent_cannot_assign(client: AsyncClient, db_session: AsyncSession
 
 @pytest.mark.asyncio
 @pytest.mark.db
-async def test_customer_cannot_author_comments(
+async def test_customer_comment_authoring_matrix(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """Matrix: CUSTOMER authors no comments in v1."""
+    """Matrix: CUSTOMER may author PUBLIC_REPLY on own ticket, but never INTERNAL_NOTE."""
     ticket_id, t_cust, _, _, _ = await _ticket_in_state(
         client, db_session, TicketStatus.OPEN, "mx7"
     )
+    # Allowed
     response = await client.post(
         f"/api/v1/tickets/{ticket_id}/comments",
         json={"type": "PUBLIC_REPLY", "body": "hello"},
         headers={"Authorization": f"Bearer {t_cust}"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
+
+    # Denied
+    response2 = await client.post(
+        f"/api/v1/tickets/{ticket_id}/comments",
+        json={"type": "INTERNAL_NOTE", "body": "secret"},
+        headers={"Authorization": f"Bearer {t_cust}"},
+    )
+    assert response2.status_code == 403
 
 
 @pytest.mark.asyncio

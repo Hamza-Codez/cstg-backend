@@ -47,6 +47,7 @@ async def get_assignment_service(
     uow = SqlAlchemyUnitOfWork(session)
     return AssignmentService(uow)
 
+
 @router.post(
     "",
     response_model=TicketResponse,
@@ -62,8 +63,7 @@ async def create_ticket(
 ) -> TicketResponse:
     if idempotency_key:
         stmt = select(IdempotencyKey).where(
-            IdempotencyKey.principal_id == principal.id,
-            IdempotencyKey.key == idempotency_key
+            IdempotencyKey.principal_id == principal.id, IdempotencyKey.key == idempotency_key
         )
         existing = (await db.execute(stmt)).scalar_one_or_none()
         if existing:
@@ -79,7 +79,7 @@ async def create_ticket(
                 principal_id=principal.id,
                 key=idempotency_key,
                 response_body=resp.model_dump(mode="json"),
-                status_code=201
+                status_code=201,
             )
             db.add(key_record)
     return resp
@@ -198,9 +198,7 @@ async def get_attachment_service(
     "/{ticket_id}/comments",
     response_model=CommentResponse,
     status_code=status.HTTP_201_CREATED,
-    # Staff author comments and upload files; customers do neither in v1
-    # (AUTHORIZATION.md §3).
-    dependencies=[Depends(require_roles(Role.AGENT, Role.DISPATCHER, Role.ADMIN))],
+    dependencies=[Depends(require_roles(Role.AGENT, Role.DISPATCHER, Role.ADMIN, Role.CUSTOMER))],
 )
 async def create_comment(
     ticket_id: uuid.UUID,

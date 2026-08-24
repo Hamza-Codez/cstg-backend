@@ -128,18 +128,18 @@ async def seed_db() -> None:
                 demo_customer.password_hash = get_password_hash(demo_password)
 
             await session.flush()
-            
+
             # Fetch agent and customer for seeding tickets
             agent_res = await session.execute(
                 select(AppUser).where(AppUser.email == "agent@example.com")
             )
             agent = agent_res.scalar_one()
-            
+
             customer_res = await session.execute(
                 select(Customer).where(Customer.email == "customer@example.com")
             )
             customer = customer_res.scalar_one()
-            
+
             # Seed tickets if there are none
             ticket_count = await session.execute(
                 select(Ticket).where(Ticket.customer_id == customer.id)
@@ -153,15 +153,19 @@ async def seed_db() -> None:
                     category=Category.TECHNICAL,
                     priority=Priority.MEDIUM,
                     status=TicketStatus.OPEN,
-                    deadline=clock.now() + timedelta(days=2)
+                    deadline=clock.now() + timedelta(days=2),
                 )
                 session.add(t1)
                 await session.flush()
-                session.add(TicketEvent(
-                    ticket_id=t1.id, type=EventType.CREATED, 
-                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
-                ))
-                
+                session.add(
+                    TicketEvent(
+                        ticket_id=t1.id,
+                        type=EventType.CREATED,
+                        actor_type=ActorType.CUSTOMER,
+                        actor_id=customer.id,
+                    )
+                )
+
                 # 2. In Progress Ticket (Assigned to Agent with comments)
                 t2 = Ticket(
                     customer_id=customer.id,
@@ -171,34 +175,55 @@ async def seed_db() -> None:
                     category=Category.BILLING,
                     priority=Priority.HIGH,
                     status=TicketStatus.IN_PROGRESS,
-                    deadline=clock.now() + timedelta(hours=4)
+                    deadline=clock.now() + timedelta(hours=4),
                 )
                 session.add(t2)
                 await session.flush()
-                session.add(TicketEvent(
-                    ticket_id=t2.id, type=EventType.CREATED, 
-                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
-                ))
-                session.add(TicketEvent(
-                    ticket_id=t2.id, type=EventType.ASSIGNMENT, 
-                    actor_type=ActorType.USER, actor_id=agent.id
-                ))
-                session.add(TicketEvent(
-                    ticket_id=t2.id, type=EventType.STATUS_CHANGE, 
-                    actor_type=ActorType.USER, actor_id=agent.id, 
-                    from_status=TicketStatus.OPEN, to_status=TicketStatus.IN_PROGRESS
-                ))
-                
+                session.add(
+                    TicketEvent(
+                        ticket_id=t2.id,
+                        type=EventType.CREATED,
+                        actor_type=ActorType.CUSTOMER,
+                        actor_id=customer.id,
+                    )
+                )
+                session.add(
+                    TicketEvent(
+                        ticket_id=t2.id,
+                        type=EventType.ASSIGNMENT,
+                        actor_type=ActorType.USER,
+                        actor_id=agent.id,
+                    )
+                )
+                session.add(
+                    TicketEvent(
+                        ticket_id=t2.id,
+                        type=EventType.STATUS_CHANGE,
+                        actor_type=ActorType.USER,
+                        actor_id=agent.id,
+                        from_status=TicketStatus.OPEN,
+                        to_status=TicketStatus.IN_PROGRESS,
+                    )
+                )
+
                 c1 = Comment(
-                    ticket_id=t2.id, author_id=agent.id, type=CommentType.PUBLIC_REPLY, 
-                    body=("We are looking into this right now. "
-                          "Could you confirm the date of the second charge?")
+                    ticket_id=t2.id,
+                    author_id=agent.id,
+                    type=CommentType.PUBLIC_REPLY,
+                    body=(
+                        "We are looking into this right now. "
+                        "Could you confirm the date of the second charge?"
+                    ),
                 )
                 session.add(c1)
-                session.add(TicketEvent(
-                    ticket_id=t2.id, type=EventType.COMMENT, 
-                    actor_type=ActorType.USER, actor_id=agent.id
-                ))
+                session.add(
+                    TicketEvent(
+                        ticket_id=t2.id,
+                        type=EventType.COMMENT,
+                        actor_type=ActorType.USER,
+                        actor_id=agent.id,
+                    )
+                )
 
                 # 3. Resolved Ticket
                 t3 = Ticket(
@@ -210,19 +235,28 @@ async def seed_db() -> None:
                     priority=Priority.LOW,
                     status=TicketStatus.RESOLVED,
                     deadline=clock.now() - timedelta(days=1),
-                    resolved_at=clock.now() - timedelta(days=1, hours=2)
+                    resolved_at=clock.now() - timedelta(days=1, hours=2),
                 )
                 session.add(t3)
                 await session.flush()
-                session.add(TicketEvent(
-                    ticket_id=t3.id, type=EventType.CREATED, 
-                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
-                ))
-                session.add(TicketEvent(
-                    ticket_id=t3.id, type=EventType.STATUS_CHANGE, 
-                    actor_type=ActorType.USER, actor_id=agent.id, 
-                    from_status=TicketStatus.IN_PROGRESS, to_status=TicketStatus.RESOLVED
-                ))
+                session.add(
+                    TicketEvent(
+                        ticket_id=t3.id,
+                        type=EventType.CREATED,
+                        actor_type=ActorType.CUSTOMER,
+                        actor_id=customer.id,
+                    )
+                )
+                session.add(
+                    TicketEvent(
+                        ticket_id=t3.id,
+                        type=EventType.STATUS_CHANGE,
+                        actor_type=ActorType.USER,
+                        actor_id=agent.id,
+                        from_status=TicketStatus.IN_PROGRESS,
+                        to_status=TicketStatus.RESOLVED,
+                    )
+                )
 
         await session.commit()
     await engine.dispose()

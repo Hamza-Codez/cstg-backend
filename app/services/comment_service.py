@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from app.core.authorization import Principal, authorize_ticket_access
 from app.core.clock import now
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
-from app.domain.errors import Forbidden, NotFound
+from app.domain.errors import NotFound
 from app.models.comment import Comment
 from app.models.enums import ActorType, EventType, Role
 from app.models.ticket_event import TicketEvent
@@ -20,10 +20,10 @@ class CommentService:
     ) -> Comment:
         """
         Adds a comment to a ticket.
-        Only staff members (AGENT, DISPATCHER, ADMIN) are allowed to author comments.
         """
-        if principal.role == Role.CUSTOMER:
-            raise Forbidden("Customers cannot author comments")
+        from app.core.authorization import authorize_comment_authoring
+        from app.domain.errors import BusinessRuleViolation
+        from app.models.enums import TicketStatus
 
         async with self.uow:
             # Check ticket existence
@@ -31,14 +31,24 @@ class CommentService:
             if not ticket:
                 raise NotFound("Ticket not found")
 
-            # Note: For v1, staff can comment on any ticket they can see.
-            # (Which is all tickets for DISPATCHER/ADMIN, and assigned for AGENTS.)
-            if principal.role == Role.AGENT and ticket.assignee_id != principal.id:
-                raise NotFound("Ticket not found")
+            if ticket.status == TicketStatus.CLOSED:
+                raise BusinessRuleViolation("This request is closed.")
+
+            authorize_comment_authoring(principal, ticket, cmd.type)
+
+            if principal.type == ActorType.CUSTOMER:
+                author_customer_id = principal.id
+                author_user_id = None
+                actor_type = ActorType.CUSTOMER
+            else:
+                author_customer_id = None
+                author_user_id = principal.id
+                actor_type = ActorType.USER
 
             comment = Comment(
                 ticket_id=ticket.id,
-                author_id=principal.id,
+                author_customer_id=author_customer_id,
+                author_user_id=author_user_id,
                 type=cmd.type,
                 body=cmd.body,
                 created_at=now(),
@@ -50,7 +60,7 @@ class CommentService:
                 id=uuid.uuid4(),
                 ticket_id=ticket.id,
                 type=EventType.COMMENT,
-                actor_type=ActorType.USER,
+                actor_type=actor_type,
                 actor_id=principal.id,
                 detail={"type": cmd.type, "comment_id": str(comment.id)},
                 created_at=now(),

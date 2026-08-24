@@ -148,6 +148,7 @@ Pure, in `app/domain/sla.py`, no I/O:
 def accrue_pause(paused_at: datetime, now: datetime, paused_seconds: int) -> int:
     """Total paused seconds after a pause that began at `paused_at` ends at `now`."""
 
+
 def due_at(deadline: datetime, paused_seconds: int) -> datetime:
     """The effective due time. INV-13: sla_due_at == deadline + paused_seconds."""
 ```

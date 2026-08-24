@@ -32,6 +32,7 @@ class Settings(BaseSettings):
                 "postgresql://", "postgresql+asyncpg://", 1
             )
         return self
+
     # Consumed by the SLA monitor from P5 onward (docs/ARCHITECTURE.md §6).
     sla_scan_interval_seconds: int = 30
 

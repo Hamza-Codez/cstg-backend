@@ -71,6 +71,7 @@ class Candidate:
     max_open_tickets: int | None
     last_assigned_at: datetime | None
 
+
 def has_capacity(c: Candidate) -> bool: ...
 def select(candidates: Sequence[Candidate], strategy: Strategy) -> UUID | None: ...
 ```

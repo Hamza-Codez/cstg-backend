@@ -150,7 +150,7 @@ In `workers/sla_monitor.py`:
 
 ```python
 while True:
-    async with session_factory() as session:      # ← OUTSIDE the try
+    async with session_factory() as session:  # ← OUTSIDE the try
         uow = SqlAlchemyUnitOfWork(session)
         try:
             await sla_service.escalate_due_breaches(now())
