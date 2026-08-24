@@ -18,7 +18,16 @@ class TicketResponse(BaseModel):
     category: Category
     priority: Priority
     status: TicketStatus
+    # The frozen original promise (INV-1/INV-2). Kept in the response as the
+    # record of "what we committed to", but it is NOT what a countdown reads —
+    # see sla_due_at (spec05 §8).
     deadline: datetime
+    # The current effective due time. This is the countdown's source.
+    sla_due_at: datetime
+    sla_paused_at: datetime | None
+    sla_paused_seconds: int
+    reopen_count: int
+    resolved_at: datetime | None
     escalation_level: int
     sla_breached_at: datetime | None
     created_at: datetime

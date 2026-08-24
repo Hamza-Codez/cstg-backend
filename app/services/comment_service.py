@@ -67,6 +67,24 @@ class CommentService:
             )
             self.uow.events.insert(event)
 
+            # T5 auto-resume (spec05 §4). A customer replying on a paused ticket
+            # IS the answer the pause was waiting for, so the clock restarts
+            # when they respond rather than when an agent notices they did.
+            #
+            # Delegated to TicketService rather than writing the columns here:
+            # the transition, its guard, and its STATUS_CHANGE event stay in one
+            # place. Same transaction as the reply, so a customer can never end
+            # up with a posted reply and a still-paused clock.
+            if (
+                principal.type == ActorType.CUSTOMER
+                and ticket.status == TicketStatus.PENDING_CUSTOMER
+            ):
+                from app.services.ticket_service import TicketService
+
+                await TicketService(self.uow).transition_ticket(
+                    principal, ticket.id, TicketStatus.IN_PROGRESS
+                )
+
             return comment
 
     async def get_ticket_comments(

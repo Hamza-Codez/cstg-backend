@@ -1,17 +1,37 @@
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, literal, select, tuple_, update
+from sqlalchemy import CursorResult, func, literal, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.clock import now
 from app.core.pagination import Cursor
+from app.domain import sla
 from app.models.customer import Customer
 from app.models.enums import TicketStatus
 from app.models.ticket import Ticket
 from app.schemas.ticket_filters import TicketFilters
+
+
+@dataclass(frozen=True)
+class TransitionWrites:
+    """Columns a transition sets alongside `status`, in one guarded UPDATE.
+
+    Separate `clear_*` flags because None already means "leave this column
+    alone" — a reopen must be able to write NULL to resolved_at, which is a
+    different intent from not touching it.
+    """
+
+    resolved_at: datetime | None = None
+    clear_resolved_at: bool = False
+    sla_paused_at: datetime | None = None
+    clear_sla_paused_at: bool = False
+    sla_paused_seconds: int | None = None
+    sla_due_at: datetime | None = None
+    increment_reopen: bool = False
 
 
 class TicketRepository:
@@ -30,24 +50,46 @@ class TicketRepository:
         ticket_id: uuid.UUID,
         expected_from: TicketStatus,
         to_status: TicketStatus,
-        resolved_at: datetime | None = None,
+        writes: "TransitionWrites | None" = None,
     ) -> bool:
+        """Guarded conditional update: the only way a ticket changes status.
+
+        Returns True if rowcount == 1, meaning the update applied and the state
+        was as expected. False means a concurrency race or an illegal state, and
+        the service raises 409.
+
+        Every side effect of the transition — resolved_at, the pause columns,
+        the reopen counter — is written **in this same statement**. If resume
+        and the sla_due_at recomputation were two statements, a concurrent
+        transition landing between them would leave the clock wrong with no
+        guard to catch it (spec05 §7).
         """
-        Guarded conditional update.
-        Returns True if rowcount == 1, meaning the update succeeded and the state was as expected.
-        Returns False if rowcount == 0, indicating a concurrency race or illegal state.
-        """
-        values = {"status": to_status, "updated_at": now()}
-        if resolved_at is not None:
-            values["resolved_at"] = resolved_at
+        writes = writes or TransitionWrites()
+        values: dict[str, object] = {"status": to_status, "updated_at": now()}
+
+        if writes.resolved_at is not None:
+            values["resolved_at"] = writes.resolved_at
+        if writes.clear_resolved_at:
+            # Required by resolved_requires_status: a reopened ticket is
+            # IN_PROGRESS, which the CHECK does not allow to carry resolved_at.
+            values["resolved_at"] = None
+
+        if writes.sla_paused_at is not None:
+            values["sla_paused_at"] = writes.sla_paused_at
+        if writes.clear_sla_paused_at:
+            values["sla_paused_at"] = None
+        if writes.sla_paused_seconds is not None:
+            values["sla_paused_seconds"] = writes.sla_paused_seconds
+        if writes.sla_due_at is not None:
+            values["sla_due_at"] = writes.sla_due_at
+        if writes.increment_reopen:
+            values["reopen_count"] = Ticket.reopen_count + 1
 
         stmt = (
             update(Ticket)
             .where(Ticket.id == ticket_id, Ticket.status == expected_from)
             .values(**values)
         )
-        from sqlalchemy import CursorResult
-
         result = await self.session.execute(stmt)
         assert isinstance(result, CursorResult)
         return result.rowcount == 1
@@ -75,11 +117,17 @@ class TicketRepository:
         return result.rowcount == 1
 
     async def get_breach_candidates(self, current_time: datetime) -> Sequence[Ticket]:
-        """Fetch tickets that are breached but haven't been escalated yet."""
+        """Tickets past their effective due time and not yet escalated.
+
+        Reads `sla_due_at`, not `deadline` — a paused ticket got that time back.
+        The predicate mirrors `ix_ticket_sla_scan` exactly, including the
+        PENDING_CUSTOMER exclusion; if the two drift, the index stops serving
+        the query and paused tickets start escalating (spec05 §11).
+        """
         stmt = select(Ticket).where(
             Ticket.sla_breached_at.is_(None),
-            Ticket.status.notin_([TicketStatus.RESOLVED, TicketStatus.CLOSED]),
-            Ticket.deadline < current_time,
+            Ticket.status.notin_(sla.NON_BREACHING),
+            Ticket.sla_due_at < current_time,
         )
         return (await self.session.execute(stmt)).scalars().all()
 
@@ -92,8 +140,11 @@ class TicketRepository:
             update(Ticket)
             .where(
                 Ticket.id == ticket_id,
+                # Idempotency guard (INV-6) and concurrency guard (INV-7).
+                # PENDING_CUSTOMER joins the terminal statuses: a human pausing
+                # the clock a millisecond earlier wins the race.
                 Ticket.sla_breached_at.is_(None),
-                Ticket.status.notin_([TicketStatus.RESOLVED, TicketStatus.CLOSED]),
+                Ticket.status.notin_(sla.NON_BREACHING),
             )
             .values(
                 sla_breached_at=current_time,

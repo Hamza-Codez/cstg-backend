@@ -22,16 +22,16 @@ def test_met_at_deadline_vs_breach_after() -> None:
     deadline = deadline_for(created_at, Priority.CRITICAL)  # 14:00
 
     # Met at exactly deadline
-    assert is_sla_met(resolved_at=deadline, deadline=deadline) is True
+    assert is_sla_met(resolved_at=deadline, due=deadline) is True
 
     # Not met after deadline
-    assert is_sla_met(resolved_at=deadline + timedelta(seconds=1), deadline=deadline) is False
+    assert is_sla_met(resolved_at=deadline + timedelta(seconds=1), due=deadline) is False
 
     # Met before deadline
-    assert is_sla_met(resolved_at=deadline - timedelta(minutes=1), deadline=deadline) is True
+    assert is_sla_met(resolved_at=deadline - timedelta(minutes=1), due=deadline) is True
 
     # Not met if unresolved (None)
-    assert is_sla_met(resolved_at=None, deadline=deadline) is False
+    assert is_sla_met(resolved_at=None, due=deadline) is False
 
 
 def test_is_breached() -> None:

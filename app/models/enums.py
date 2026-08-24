@@ -4,6 +4,9 @@ from enum import StrEnum
 class TicketStatus(StrEnum):
     OPEN = "OPEN"
     IN_PROGRESS = "IN_PROGRESS"
+    # P16: the clock stops here — the desk is not the blocker. Added by
+    # migration 0013.
+    PENDING_CUSTOMER = "PENDING_CUSTOMER"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
 

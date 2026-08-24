@@ -151,18 +151,30 @@ async def test_transition_unauthorized(client: AsyncClient, db_session: AsyncSes
         headers={"Authorization": f"Bearer {token2}"},
     )
 
-    # 403, not 404: a customer may drive no transition on ANY ticket, so this is a
-    # role-level denial (API.md §2 "authenticated but not permitted"), decided
-    # before ownership is ever considered. It leaks nothing — the same 403 comes
-    # back for a ticket id that does not exist at all, asserted below.
-    assert resp2.status_code == 403
+    # 404, not 403. From P16 a customer CAN drive two transitions (T5 resume,
+    # T6 reopen), so the coarse gate admits them and the denial is decided
+    # object-level instead: customer2 cannot see this ticket, and INV-9 says a
+    # hidden resource is 404.
+    #
+    # The no-leak property is unchanged and still asserted below — a ticket id
+    # that does not exist returns the same 404, so the two are indistinguishable.
+    assert resp2.status_code == 404
 
     missing = await client.post(
         f"/api/v1/tickets/{uuid.uuid4()}/transitions",
         json={"to": "IN_PROGRESS"},
         headers={"Authorization": f"Bearer {token2}"},
     )
-    assert missing.status_code == 403, "role denial must not reveal whether the ticket exists"
+    assert missing.status_code == 404, "denial must not reveal whether the ticket exists"
+
+    # On a ticket they DO own, the role gate is what refuses — a customer may
+    # never assert that work was done.
+    own = await client.post(
+        f"/api/v1/tickets/{ticket_id}/transitions",
+        json={"to": "IN_PROGRESS"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert own.status_code == 403
 
 
 @pytest.mark.asyncio

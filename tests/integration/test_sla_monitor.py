@@ -14,6 +14,7 @@ from app.models.enums import Category, CustomerTier, EventType, Priority, Ticket
 from app.models.priority_rule import PriorityRule
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent
+from app.repositories.ticket_repo import TransitionWrites
 from app.services.sla_service import SLAService
 
 
@@ -131,7 +132,10 @@ async def test_sla_concurrency_race_with_resolve(
             # Use the guarded conditional update that TicketService uses (P3/T2 guard)
             async with uow:
                 await ticket_repo.transition_if(
-                    ticket_id, TicketStatus.OPEN, TicketStatus.RESOLVED, resolved_at=now()
+                    ticket_id,
+                    TicketStatus.OPEN,
+                    TicketStatus.RESOLVED,
+                    writes=TransitionWrites(resolved_at=now()),
                 )
 
     async def simulate_sla_monitor() -> None:

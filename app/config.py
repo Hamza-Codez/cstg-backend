@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # Consumed by the SLA monitor from P5 onward (docs/ARCHITECTURE.md §6).
     sla_scan_interval_seconds: int = 30
 
+    # How long after resolution a ticket may still be reopened (T6, spec05 §4).
+    # Unbounded reopen would let a year-old ticket return and immediately
+    # breach against a year-old deadline.
+    reopen_window_days: int = 14
+
     # Signing key for JWTs. The default is convenient locally and is published in
     # this repository, so it is refused outright in production — see the validator
     # below. Generate a real one with `python -c "import secrets;

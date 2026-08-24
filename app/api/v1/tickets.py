@@ -179,9 +179,13 @@ async def get_ticket(
 @router.post(
     "/{ticket_id}/transitions",
     response_model=TicketResponse,
-    # Coarse gate: customers drive no transitions (AUTHORIZATION.md §3). Which of
-    # T1-T3 each staff role may drive is decided per-transition in the service.
-    dependencies=[Depends(require_roles(Role.AGENT, Role.DISPATCHER, Role.ADMIN))],
+    # Coarse gate admits every authenticated role from P16: customers drive T5
+    # (resume) and T6 (reopen). Which of T1-T6 each role may actually drive is
+    # decided per-transition from the table in the service, so widening here
+    # grants nothing on its own — a customer attempting T1/T2/T3 still gets 403.
+    dependencies=[
+        Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))
+    ],
 )
 async def transition_ticket(
     ticket_id: uuid.UUID,
