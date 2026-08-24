@@ -1,8 +1,12 @@
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 
 from app.models.enums import Priority, TicketStatus
 
-_DURATION_BY_PRIORITY = {
+#: The durations the system shipped with. They live in `sla_policy` from P17
+#: (migration 0015 seeded this exact mapping as version 1); this stays as the
+#: documented default and the seed's source of truth, not as a runtime fallback.
+DEFAULT_DURATIONS = {
     Priority.CRITICAL: timedelta(hours=2),
     Priority.HIGH: timedelta(hours=8),
     Priority.MEDIUM: timedelta(hours=24),
@@ -14,18 +18,27 @@ _DURATION_BY_PRIORITY = {
 NON_BREACHING = (TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.PENDING_CUSTOMER)
 
 
-def duration(priority: Priority) -> timedelta:
-    """Return the SLA duration for a priority."""
-    return _DURATION_BY_PRIORITY[priority]
+def duration(priority: Priority, policy: Mapping[Priority, timedelta]) -> timedelta:
+    """The SLA duration for a priority, under a given policy.
+
+    The policy is passed in rather than loaded: `domain/` performs no I/O, the
+    same rule `priority.resolve` already follows by receiving the priority-rule
+    mapping. A missing priority is a KeyError, never a silent default — a
+    partial policy is a configuration error caught at write time (spec06 §4).
+    """
+    return policy[priority]
 
 
-def deadline_for(created_at: datetime, priority: Priority) -> datetime:
+def deadline_for(
+    created_at: datetime, priority: Priority, policy: Mapping[Priority, timedelta]
+) -> datetime:
     """Compute the immutable deadline for a ticket (INV-1, INV-2).
 
-    Written once at creation and never recomputed — not even by a pause, which
-    accrues into a separate column instead.
+    Written once at creation and never recomputed — not by a pause, which
+    accrues into a separate column, and not by a later policy change, which is
+    why an existing ticket keeps the terms it was created under.
     """
-    return created_at + duration(priority)
+    return created_at + duration(priority, policy)
 
 
 def due_at(deadline: datetime, paused_seconds: int) -> datetime:

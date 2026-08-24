@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.sla import duration
+from app.domain.sla import DEFAULT_DURATIONS, duration
 from app.models.enums import EventType, Priority, TicketStatus
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent
@@ -147,7 +147,7 @@ async def test_inv1_priority_and_deadline_never_change(
     ticket = (
         await db_session.execute(select(Ticket).where(Ticket.id == uuid.UUID(ticket_id)))
     ).scalar_one()
-    expected = duration(Priority(original_priority))
+    expected = duration(Priority(original_priority), DEFAULT_DURATIONS)
     assert ticket.deadline - ticket.created_at == expected, (
         "deadline must still equal created_at + duration(priority) (INV-2)"
     )

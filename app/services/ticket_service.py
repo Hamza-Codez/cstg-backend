@@ -45,9 +45,16 @@ class TicketService:
         if not priority_enum:
             raise DomainError("Priority rule not found for customer tier and category")
 
-        # 3. Calculate SLA deadline
+        # 3. Calculate the SLA deadline under the policy active RIGHT NOW, and
+        #    pin that version to the ticket. Read in the same transaction as the
+        #    insert, so a policy activated mid-request cannot half-apply.
+        policy_version = await self.uow.sla_policies.active_version()
+        if policy_version is None:
+            raise DomainError("No active SLA policy is configured")
+        durations = await self.uow.sla_policies.entries_for(policy_version.id)
+
         created_at = now()
-        deadline = sla.deadline_for(created_at, priority_enum)
+        deadline = sla.deadline_for(created_at, priority_enum, durations)
 
         # 4. Create Ticket model
         ticket = Ticket(
@@ -62,6 +69,9 @@ class TicketService:
             # Nothing has paused yet, so the effective due time is the
             # original promise (INV-13 holds trivially at creation).
             sla_due_at=deadline,
+            # INV-15: written once, never changed. It is what lets the UI
+            # explain why this ticket got the window it did.
+            sla_policy_version_id=policy_version.id,
             created_at=created_at,
         )
 

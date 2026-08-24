@@ -32,8 +32,8 @@ async def test_comment_authorship_inv11(db_session: AsyncSession) -> None:
     ticket_id = uuid.uuid4()
     await db_session.execute(
         text(
-            "INSERT INTO ticket (id, customer_id, assignee_id, subject, body, category, priority, status, created_at, deadline, sla_due_at) "
-            "VALUES (:id, :cid, :aid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now)"
+            "INSERT INTO ticket (id, customer_id, assignee_id, subject, body, category, priority, status, created_at, deadline, sla_due_at, sla_policy_version_id) "
+            "VALUES (:id, :cid, :aid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now, (SELECT id FROM sla_policy_version WHERE superseded_at IS NULL LIMIT 1))"
         ),
         {"id": ticket_id, "cid": customer_id, "aid": agent_id, "now": datetime.now(UTC)},
     )
@@ -77,8 +77,8 @@ async def test_comment_check_constraints_at_db_level(db_session: AsyncSession) -
     now = datetime.now(UTC)
     await db_session.execute(
         text(
-            "INSERT INTO ticket (id, customer_id, subject, body, category, priority, status, created_at, deadline, sla_due_at) "
-            "VALUES (:id, :cid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now)"
+            "INSERT INTO ticket (id, customer_id, subject, body, category, priority, status, created_at, deadline, sla_due_at, sla_policy_version_id) "
+            "VALUES (:id, :cid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now, (SELECT id FROM sla_policy_version WHERE superseded_at IS NULL LIMIT 1))"
         ),
         {"id": ticket_id, "cid": customer_id, "now": now},
     )
@@ -132,8 +132,8 @@ async def test_comment_atomicity_with_event(db_session: AsyncSession) -> None:
     ticket_id = uuid.uuid4()
     await db_session.execute(
         text(
-            "INSERT INTO ticket (id, customer_id, subject, body, category, priority, status, created_at, deadline, sla_due_at) "
-            "VALUES (:id, :cid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now)"
+            "INSERT INTO ticket (id, customer_id, subject, body, category, priority, status, created_at, deadline, sla_due_at, sla_policy_version_id) "
+            "VALUES (:id, :cid, 'S', 'B', 'GENERAL', 'MEDIUM', 'OPEN', :now, :now, :now, (SELECT id FROM sla_policy_version WHERE superseded_at IS NULL LIMIT 1))"
         ),
         {"id": ticket_id, "cid": customer_id, "now": datetime.now(UTC)},
     )

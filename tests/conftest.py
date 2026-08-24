@@ -21,6 +21,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
@@ -108,9 +109,43 @@ async def db_session(
     tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE"))
+        await _seed_active_sla_policy(conn)
 
     async with session_factory() as session:
         yield session
+
+
+async def _seed_active_sla_policy(conn: AsyncConnection) -> None:
+    """Restore the SLA policy the TRUNCATE just removed (P17).
+
+    Migration 0015 seeds an active policy, but sla_policy_version is in the
+    metadata and so gets truncated with everything else. Ticket creation reads
+    the active policy and refuses without one — correctly, since a system with
+    no policy is misconfigured — so every test that creates a ticket needs it
+    back.
+
+    Seeded here rather than per-test because "there is always an active policy"
+    is a property of the system, not of any individual test.
+    """
+    from app.domain.sla import DEFAULT_DURATIONS
+
+    version_id = (
+        await conn.execute(
+            text(
+                "INSERT INTO sla_policy_version (activated_at, note) "
+                "VALUES (now(), 'test harness default') RETURNING id"
+            )
+        )
+    ).scalar_one()
+
+    for priority, delta in DEFAULT_DURATIONS.items():
+        await conn.execute(
+            text(
+                "INSERT INTO sla_policy_entry (version_id, priority, seconds) "
+                "VALUES (:vid, :priority, :seconds)"
+            ),
+            {"vid": version_id, "priority": priority.value, "seconds": int(delta.total_seconds())},
+        )
 
 
 # ── Clock ────────────────────────────────────────────────────────────────────

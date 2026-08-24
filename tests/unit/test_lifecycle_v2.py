@@ -98,8 +98,10 @@ def test_sla_met_at_exactly_the_boundary() -> None:
 
 
 def test_durations_are_unchanged_from_v1() -> None:
-    assert sla.duration(Priority.CRITICAL) == timedelta(hours=2)
-    assert sla.duration(Priority.LOW) == timedelta(hours=72)
+    # The policy is passed in from P17; DEFAULT_DURATIONS is what migration 0015
+    # seeded as version 1, so these are still the shipped terms.
+    assert sla.duration(Priority.CRITICAL, sla.DEFAULT_DURATIONS) == timedelta(hours=2)
+    assert sla.duration(Priority.LOW, sla.DEFAULT_DURATIONS) == timedelta(hours=72)
 
 
 # ── Transition table ─────────────────────────────────────────────────────────

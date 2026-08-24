@@ -14,6 +14,7 @@ from .enums import (
 )
 from .idempotency import IdempotencyKey
 from .priority_rule import PriorityRule
+from .sla_policy import SlaPolicyEntry, SlaPolicyVersion
 from .ticket import Ticket
 from .ticket_event import TicketEvent
 from .user import AppUser
@@ -26,6 +27,8 @@ __all__ = [
     "Comment",
     "TicketEvent",
     "PriorityRule",
+    "SlaPolicyEntry",
+    "SlaPolicyVersion",
     "Attachment",
     "TicketStatus",
     "Priority",
