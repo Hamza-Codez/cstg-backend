@@ -1,0 +1,45 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .base import Base, TimestampMixin, UUIDMixin
+from .enums import Category, Priority, TicketStatus
+
+
+class Ticket(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "ticket"
+
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customer.id"), nullable=False)
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[Category] = mapped_column(nullable=False)
+    priority: Mapped[Priority] = mapped_column(nullable=False)
+    status: Mapped[TicketStatus] = mapped_column(default=TicketStatus.OPEN, nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    escalation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sla_breached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("escalation_level >= 0", name="ticket_escalation_level_check"),
+        CheckConstraint(
+            "resolved_at IS NULL OR status IN ('RESOLVED', 'CLOSED')",
+            name="resolved_requires_status",
+        ),
+        CheckConstraint(
+            "sla_breached_at IS NULL OR sla_breached_at >= deadline",
+            name="breached_only_when_past_deadline",
+        ),
+        Index(
+            "ix_ticket_sla_scan",
+            "deadline",
+            postgresql_where=text(
+                "sla_breached_at IS NULL AND status NOT IN ('RESOLVED', 'CLOSED')"
+            ),
+        ),
+        Index("ix_ticket_assignee_status", "assignee_id", "status"),
+        Index("ix_ticket_customer", "customer_id", text("created_at DESC")),
+    )
