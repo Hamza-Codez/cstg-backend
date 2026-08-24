@@ -20,7 +20,7 @@ _STATUS_BY_ERROR: list[tuple[type[DomainError], int, str]] = [
     (Forbidden, status.HTTP_403_FORBIDDEN, "FORBIDDEN"),
     (NotFound, status.HTTP_404_NOT_FOUND, "NOT_FOUND"),
     (StateConflict, status.HTTP_409_CONFLICT, "STATE_CONFLICT"),
-    (BusinessRuleViolation, status.HTTP_422_UNPROCESSABLE_ENTITY, "BUSINESS_RULE_VIOLATION"),
+    (BusinessRuleViolation, status.HTTP_422_UNPROCESSABLE_CONTENT, "BUSINESS_RULE_VIOLATION"),
 ]
 
 

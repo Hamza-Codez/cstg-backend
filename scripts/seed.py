@@ -1,15 +1,29 @@
 import asyncio
 import os
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.config import get_settings
+from app.core import clock
 from app.core.security import get_password_hash
 from app.database import create_engine, create_session_factory
+from app.models.comment import Comment
 from app.models.customer import Customer
-from app.models.enums import Category, CustomerTier, Priority, Role
+from app.models.enums import (
+    ActorType,
+    Category,
+    CommentType,
+    CustomerTier,
+    EventType,
+    Priority,
+    Role,
+    TicketStatus,
+)
 from app.models.priority_rule import PriorityRule
+from app.models.ticket import Ticket
+from app.models.ticket_event import TicketEvent
 from app.models.user import AppUser
 
 PRIORITY_MATRIX = {
@@ -112,6 +126,103 @@ async def seed_db() -> None:
                 )
             else:
                 demo_customer.password_hash = get_password_hash(demo_password)
+
+            await session.flush()
+            
+            # Fetch agent and customer for seeding tickets
+            agent_res = await session.execute(
+                select(AppUser).where(AppUser.email == "agent@example.com")
+            )
+            agent = agent_res.scalar_one()
+            
+            customer_res = await session.execute(
+                select(Customer).where(Customer.email == "customer@example.com")
+            )
+            customer = customer_res.scalar_one()
+            
+            # Seed tickets if there are none
+            ticket_count = await session.execute(
+                select(Ticket).where(Ticket.customer_id == customer.id)
+            )
+            if ticket_count.first() is None:
+                # 1. Open Ticket (Unassigned)
+                t1 = Ticket(
+                    customer_id=customer.id,
+                    subject="Login issue on mobile app",
+                    body="I can't seem to log into the mobile app, it keeps spinning.",
+                    category=Category.TECHNICAL,
+                    priority=Priority.MEDIUM,
+                    status=TicketStatus.OPEN,
+                    deadline=clock.now() + timedelta(days=2)
+                )
+                session.add(t1)
+                await session.flush()
+                session.add(TicketEvent(
+                    ticket_id=t1.id, type=EventType.CREATED, 
+                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
+                ))
+                
+                # 2. In Progress Ticket (Assigned to Agent with comments)
+                t2 = Ticket(
+                    customer_id=customer.id,
+                    assignee_id=agent.id,
+                    subject="Billing discrepancy for last month",
+                    body="I was charged twice for the Enterprise plan last month.",
+                    category=Category.BILLING,
+                    priority=Priority.HIGH,
+                    status=TicketStatus.IN_PROGRESS,
+                    deadline=clock.now() + timedelta(hours=4)
+                )
+                session.add(t2)
+                await session.flush()
+                session.add(TicketEvent(
+                    ticket_id=t2.id, type=EventType.CREATED, 
+                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
+                ))
+                session.add(TicketEvent(
+                    ticket_id=t2.id, type=EventType.ASSIGNMENT, 
+                    actor_type=ActorType.USER, actor_id=agent.id
+                ))
+                session.add(TicketEvent(
+                    ticket_id=t2.id, type=EventType.STATUS_CHANGE, 
+                    actor_type=ActorType.USER, actor_id=agent.id, 
+                    from_status=TicketStatus.OPEN, to_status=TicketStatus.IN_PROGRESS
+                ))
+                
+                c1 = Comment(
+                    ticket_id=t2.id, author_id=agent.id, type=CommentType.PUBLIC_REPLY, 
+                    body=("We are looking into this right now. "
+                          "Could you confirm the date of the second charge?")
+                )
+                session.add(c1)
+                session.add(TicketEvent(
+                    ticket_id=t2.id, type=EventType.COMMENT, 
+                    actor_type=ActorType.USER, actor_id=agent.id
+                ))
+
+                # 3. Resolved Ticket
+                t3 = Ticket(
+                    customer_id=customer.id,
+                    assignee_id=agent.id,
+                    subject="How to reset password?",
+                    body="I forgot my password for the reporting dashboard.",
+                    category=Category.GENERAL,
+                    priority=Priority.LOW,
+                    status=TicketStatus.RESOLVED,
+                    deadline=clock.now() - timedelta(days=1),
+                    resolved_at=clock.now() - timedelta(days=1, hours=2)
+                )
+                session.add(t3)
+                await session.flush()
+                session.add(TicketEvent(
+                    ticket_id=t3.id, type=EventType.CREATED, 
+                    actor_type=ActorType.CUSTOMER, actor_id=customer.id
+                ))
+                session.add(TicketEvent(
+                    ticket_id=t3.id, type=EventType.STATUS_CHANGE, 
+                    actor_type=ActorType.USER, actor_id=agent.id, 
+                    from_status=TicketStatus.IN_PROGRESS, to_status=TicketStatus.RESOLVED
+                ))
 
         await session.commit()
     await engine.dispose()
