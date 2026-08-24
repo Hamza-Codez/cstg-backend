@@ -44,7 +44,7 @@ TEST_NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 @pytest.fixture(scope="session")
 def postgres_url() -> Iterator[str]:
     """A throwaway PostgreSQL 16 container, started once per session on first use."""
-    from testcontainers.postgres import PostgresContainer
+    from testcontainers.community.postgres import PostgresContainer
 
     with PostgresContainer("postgres:16-alpine", driver="asyncpg") as container:
         yield container.get_connection_url()
