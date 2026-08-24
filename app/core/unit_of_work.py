@@ -9,6 +9,7 @@ from app.repositories.comment_repo import CommentRepository
 from app.repositories.customer_repo import CustomerRepository
 from app.repositories.event_repo import TicketEventRepository
 from app.repositories.priority_rule_repo import PriorityRuleRepository
+from app.repositories.saved_view_repo import SavedViewRepository
 from app.repositories.ticket_repo import TicketRepository
 from app.repositories.user_repo import UserRepository
 
@@ -28,6 +29,7 @@ class SqlAlchemyUnitOfWork:
         self.users = UserRepository(session)
         self.comments = CommentRepository(session)
         self.attachments = AttachmentRepository(session)
+        self.saved_views = SavedViewRepository(session)
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
         # FastAPI's session dependency creates a session per request.

@@ -1,17 +1,17 @@
 import uuid
-from datetime import datetime
 
 from app.core.authorization import Principal, authorize_ticket_access
 from app.core.clock import now
-from app.core.pagination import encode_cursor
+from app.core.pagination import Cursor, InvalidCursor, encode_cursor, require_shape
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.domain import sla
-from app.domain.errors import DomainError
+from app.domain.errors import DomainError, ValidationError
 from app.domain.state_machine import is_legal_transition, is_role_authorized
-from app.models.enums import ActorType, EventType, Priority, Role, TicketStatus
+from app.models.enums import ActorType, EventType, Role, TicketStatus
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent
 from app.schemas.ticket import TicketCreate
+from app.schemas.ticket_filters import TicketFilters, authorize_filters
 
 
 class TicketService:
@@ -186,18 +186,34 @@ class TicketService:
         self,
         principal: Principal,
         *,
-        status: TicketStatus | None = None,
-        priority: Priority | None = None,
-        breached: bool | None = None,
-        assigned: bool | None = None,
+        filters: TicketFilters | None = None,
         limit: int = 50,
-        cursor: tuple[datetime, uuid.UUID] | None = None,
+        cursor: Cursor | None = None,
     ) -> tuple[list[Ticket], str | None]:
         """Tickets this principal may list, plus the cursor for the next page.
 
         Read scope per AUTHORIZATION.md §3: customers see their own, agents see
         what is assigned to them, dispatchers and admins see everything (INV-9).
+
+        The scope is applied by the repository in the same statement as the
+        search predicate, so relevance ranking can never run over rows this
+        principal may not see (spec04 §3).
         """
+        filters = filters or TicketFilters()
+
+        # Capability gate before anything is read: a filter this principal may
+        # not use is a 403, never a silently narrowed result set.
+        authorize_filters(principal, filters)
+
+        if cursor is not None:
+            # InvalidCursor is a plain ValueError so that core/ stays free of
+            # domain imports; translating it here is what puts it in the error
+            # taxonomy (400) instead of escaping as a 500.
+            try:
+                require_shape(cursor, searching=filters.is_search)
+            except InvalidCursor as exc:
+                raise ValidationError(str(exc)) from exc
+
         scope: dict[str, uuid.UUID] = {}
         if principal.type == ActorType.CUSTOMER:
             scope["customer_id"] = principal.id
@@ -208,10 +224,7 @@ class TicketService:
         rows = list(
             await self.uow.tickets.list_scoped(
                 **scope,
-                status=status,
-                priority=priority,
-                breached=breached,
-                assigned=assigned,
+                filters=filters,
                 limit=limit + 1,
                 cursor=cursor,
             )
@@ -219,5 +232,8 @@ class TicketService:
 
         has_more = len(rows) > limit
         page = rows[:limit]
-        next_cursor = encode_cursor(page[-1].created_at, page[-1].id) if has_more and page else None
-        return page, next_cursor
+        next_cursor = None
+        if has_more and page:
+            last_ticket, last_rank = page[-1]
+            next_cursor = encode_cursor(last_ticket.created_at, last_ticket.id, rank=last_rank)
+        return [ticket for ticket, _ in page], next_cursor

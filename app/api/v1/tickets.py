@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, UploadFile, status
@@ -12,8 +13,8 @@ from app.core.pagination import InvalidCursor, decode_cursor
 from app.core.storage import StorageBackend
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.domain.errors import ValidationError
+from app.models.enums import Category, CustomerTier, Role, TicketStatus
 from app.models.enums import Priority as TicketPriority
-from app.models.enums import Role, TicketStatus
 from app.models.idempotency import IdempotencyKey
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.comment import CommentCreate, CommentResponse
@@ -27,6 +28,7 @@ from app.schemas.ticket import (
     TicketResponse,
     TransitionRequest,
 )
+from app.schemas.ticket_filters import TicketFilters
 from app.services.assignment_service import AssignmentService
 from app.services.attachment_service import AttachmentService
 from app.services.comment_service import CommentService
@@ -93,28 +95,53 @@ async def create_ticket(
 async def list_tickets(
     principal: Annotated[Principal, Depends(get_current_principal)],
     service: Annotated[TicketService, Depends(get_ticket_service)],
+    q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     status_filter: Annotated[TicketStatus | None, Query(alias="status")] = None,
     priority: TicketPriority | None = None,
+    category: Category | None = None,
     breached: bool | None = None,
     assigned: bool | None = None,
+    escalated: bool | None = None,
+    tier: CustomerTier | None = None,
+    assignee_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: str | None = None,
 ) -> PaginatedTicketResponse:
-    """Role-scoped list with filters and keyset pagination (docs/API.md §1, §4)."""
+    """Role-scoped search, filters and keyset pagination (docs/API.md §1, §4).
+
+    Filters a principal may not use are refused 403 by the service — never
+    silently dropped, which would answer a different question than the one asked
+    (spec04 §4).
+    """
+    filters = TicketFilters(
+        q=q,
+        status=status_filter,
+        priority=priority,
+        category=category,
+        breached=breached,
+        assigned=assigned,
+        escalated=escalated,
+        tier=tier,
+        assignee_id=assignee_id,
+        customer_id=customer_id,
+        created_after=created_after,
+        created_before=created_before,
+    )
+
     decoded = None
     if cursor:
         try:
             decoded = decode_cursor(cursor)
         except InvalidCursor as exc:
-            raise ValidationError("Malformed pagination cursor") from exc
+            raise ValidationError(str(exc)) from exc
 
     async with service.uow:
         tickets, next_cursor = await service.list_tickets(
             principal,
-            status=status_filter,
-            priority=priority,
-            breached=breached,
-            assigned=assigned,
+            filters=filters,
             limit=limit,
             cursor=decoded,
         )
