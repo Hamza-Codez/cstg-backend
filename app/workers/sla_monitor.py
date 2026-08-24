@@ -18,7 +18,18 @@ async def run_sla_monitor(
     Background loop that wakes up periodically and executes the SLA monitor.
     Uses its own db sessions mapped from the injected session_factory.
     """
-    logger.info(f"SLA monitor started (interval: {scan_interval_seconds}s)")
+    logger.info(f"SLA monitor started (interval: {scan_interval_seconds}s). Waiting for DB...")
+
+    from sqlalchemy import text
+    while True:
+        try:
+            async with session_factory() as session:
+                await session.execute(text("SELECT 1"))
+                break
+        except Exception:
+            await asyncio.sleep(2)
+            
+    logger.info("Database is ready. Beginning SLA monitor loop.")
 
     try:
         while True:

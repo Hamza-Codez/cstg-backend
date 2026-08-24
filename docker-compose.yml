@@ -28,6 +28,15 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+    # You can verify health directly using curl:
+    # curl -f http://localhost:8000/health
+    # curl -f http://localhost:8000/health/db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   pgdata:
