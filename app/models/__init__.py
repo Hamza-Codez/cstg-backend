@@ -1,3 +1,4 @@
+from .attachment import Attachment
 from .base import Base
 from .comment import Comment
 from .customer import Customer
@@ -11,6 +12,7 @@ from .enums import (
     Role,
     TicketStatus,
 )
+from .idempotency import IdempotencyKey
 from .priority_rule import PriorityRule
 from .ticket import Ticket
 from .ticket_event import TicketEvent
@@ -33,4 +35,5 @@ __all__ = [
     "CommentType",
     "EventType",
     "ActorType",
+    "IdempotencyKey",
 ]

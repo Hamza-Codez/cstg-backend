@@ -23,7 +23,15 @@ class Settings(BaseSettings):
 
     env: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+asyncpg://support:support@localhost:5432/support"
+    frontend_origin: str = ""
 
+    @model_validator(mode="after")
+    def _normalize_database_url(self) -> "Settings":
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
+        return self
     # Consumed by the SLA monitor from P5 onward (docs/ARCHITECTURE.md §6).
     sla_scan_interval_seconds: int = 30
 

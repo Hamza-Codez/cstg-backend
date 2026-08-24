@@ -70,6 +70,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    from fastapi.middleware.cors import CORSMiddleware
+
+    origins = [settings.frontend_origin] if settings.frontend_origin else []
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     from fastapi.exceptions import RequestValidationError
 
     from app.api.errors import (

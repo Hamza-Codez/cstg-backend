@@ -7,10 +7,9 @@ Create Date: 2026-08-24 16:22:56.794599
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision: str = '0008'
 down_revision: str | None = '0007_column_defaults'
@@ -25,7 +24,12 @@ def upgrade() -> None:
     sa.Column('key', sa.String(length=100), nullable=False),
     sa.Column('response_body', sa.JSON(), nullable=False),
     sa.Column('status_code', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column(
+        'created_at',
+        sa.DateTime(timezone=True),
+        server_default=sa.text('now()'),
+        nullable=False
+    ),
     sa.PrimaryKeyConstraint('principal_id', 'key')
     )
     # ### end Alembic commands ###

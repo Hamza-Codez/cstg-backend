@@ -29,3 +29,11 @@ def test_production_refuses_a_short_key() -> None:
 
 def test_production_accepts_a_real_key() -> None:
     assert Settings(env="production", secret_key=REAL_KEY).secret_key == REAL_KEY
+
+
+def test_database_url_normalization() -> None:
+    settings_async = Settings(database_url="postgresql+asyncpg://user:pass@host/db")
+    assert settings_async.database_url == "postgresql+asyncpg://user:pass@host/db"
+
+    settings_sync = Settings(database_url="postgresql://user:pass@host/db")
+    assert settings_sync.database_url == "postgresql+asyncpg://user:pass@host/db"

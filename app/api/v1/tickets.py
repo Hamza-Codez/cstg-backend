@@ -1,10 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, UploadFile, status, Header
+from fastapi import APIRouter, Depends, Header, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal, get_db
 from app.core.authorization import Principal, require_roles
@@ -13,6 +13,7 @@ from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.domain.errors import ValidationError
 from app.models.enums import Priority as TicketPriority
 from app.models.enums import Role, TicketStatus
+from app.models.idempotency import IdempotencyKey
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.comment import CommentCreate, CommentResponse
 from app.schemas.ticket import (
@@ -29,7 +30,6 @@ from app.services.assignment_service import AssignmentService
 from app.services.attachment_service import AttachmentService
 from app.services.comment_service import CommentService
 from app.services.ticket_service import TicketService
-from app.models.idempotency import IdempotencyKey
 
 router = APIRouter(
     prefix="/tickets", tags=["Tickets"], dependencies=[Depends(get_current_principal)]
