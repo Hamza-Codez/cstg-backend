@@ -208,7 +208,7 @@ async def seed_db() -> None:
 
                 c1 = Comment(
                     ticket_id=t2.id,
-                    author_id=agent.id,
+                    author_user_id=agent.id,
                     type=CommentType.PUBLIC_REPLY,
                     body=(
                         "We are looking into this right now. "
@@ -222,6 +222,24 @@ async def seed_db() -> None:
                         type=EventType.COMMENT,
                         actor_type=ActorType.USER,
                         actor_id=agent.id,
+                    )
+                )
+
+                c2 = Comment(
+                    ticket_id=t2.id,
+                    author_customer_id=customer.id,
+                    type=CommentType.PUBLIC_REPLY,
+                    body=(
+                        "Yes, it happened on the 15th of this month. Thanks for looking into it."
+                    ),
+                )
+                session.add(c2)
+                session.add(
+                    TicketEvent(
+                        ticket_id=t2.id,
+                        type=EventType.COMMENT,
+                        actor_type=ActorType.CUSTOMER,
+                        actor_id=customer.id,
                     )
                 )
 
