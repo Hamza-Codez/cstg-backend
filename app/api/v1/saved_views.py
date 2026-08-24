@@ -33,7 +33,12 @@ async def get_saved_view_service(
     return SavedViewService(SqlAlchemyUnitOfWork(session))
 
 
-@router.get("", response_model=dict[str, list[SavedViewResponse]])
+# exclude_none: a stored view holds only the filters that were set, but
+# TicketFilters re-serialises every field. Emitting nulls would put the
+# literal string "null" in a client URL that round-trips them.
+@router.get(
+    "", response_model=dict[str, list[SavedViewResponse]], response_model_exclude_none=True
+)
 async def list_saved_views(
     principal: Annotated[Principal, Depends(get_current_principal)],
     service: Annotated[SavedViewService, Depends(get_saved_view_service)],
@@ -43,7 +48,12 @@ async def list_saved_views(
     return {"items": [SavedViewResponse.model_validate(v, from_attributes=True) for v in views]}
 
 
-@router.post("", response_model=SavedViewResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=SavedViewResponse,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_none=True,
+)
 async def create_saved_view(
     data: SavedViewCreate,
     principal: Annotated[Principal, Depends(get_current_principal)],
