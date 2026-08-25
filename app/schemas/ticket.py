@@ -27,6 +27,9 @@ class TicketResponse(BaseModel):
     sla_paused_at: datetime | None
     sla_paused_seconds: int
     reopen_count: int
+    #: The policy this ticket's window was computed under (INV-15). Lets the
+    #: UI explain a frozen deadline rather than leave it looking like a bug.
+    sla_policy_version_id: uuid.UUID
     resolved_at: datetime | None
     escalation_level: int
     sla_breached_at: datetime | None
@@ -64,6 +67,11 @@ class TicketDetailResponse(TicketResponse):
     body: str
     assignee: AssigneeSummary | None = None
     timeline: list[TicketEventResponse] = Field(default_factory=list)
+    #: The duration this ticket's priority carried under its pinned policy.
+    #: Embedded so the detail screen can say "2 hours, under the policy active
+    #: when this was created" without a second request.
+    sla_policy_seconds: int | None = None
+    sla_policy_activated_at: datetime | None = None
 
 
 class PaginatedTicketResponse(BaseModel):

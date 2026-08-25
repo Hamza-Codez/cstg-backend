@@ -168,11 +168,20 @@ async def get_ticket(
             if owner is not None:
                 assignee = AssigneeSummary(id=owner.id, name=owner.name)
 
+        # The window this ticket was actually given, read from ITS pinned
+        # version rather than the active one — that is the whole point of
+        # pinning (INV-15). Two indexed lookups, no extra round trip for the UI.
+        pinned = await service.uow.sla_policies.get_version(ticket.sla_policy_version_id)
+        durations = await service.uow.sla_policies.entries_for(ticket.sla_policy_version_id)
+        seconds = durations.get(ticket.priority)
+
     return TicketDetailResponse(
         **TicketResponse.model_validate(ticket, from_attributes=True).model_dump(),
         body=ticket.body,
         assignee=assignee,
         timeline=[TicketEventResponse.model_validate(e, from_attributes=True) for e in events],
+        sla_policy_seconds=int(seconds.total_seconds()) if seconds else None,
+        sla_policy_activated_at=pinned.activated_at if pinned else None,
     )
 
 

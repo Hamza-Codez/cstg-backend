@@ -22,6 +22,10 @@ class SlaPolicyRepository:
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def get_version(self, version_id: uuid.UUID) -> SlaPolicyVersion | None:
+        stmt = select(SlaPolicyVersion).where(SlaPolicyVersion.id == version_id)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def entries_for(self, version_id: uuid.UUID) -> dict[Priority, timedelta]:
         """A version's durations, shaped for `domain.sla`."""
         stmt = select(SlaPolicyEntry).where(SlaPolicyEntry.version_id == version_id)
