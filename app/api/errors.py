@@ -58,6 +58,9 @@ async def validation_exception_handler(
 
 
 async def internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    import logging
+
+    logging.exception("Unhandled exception:")
     envelope = ErrorEnvelope(
         error=ErrorDetail(
             code="INTERNAL_ERROR", message="An unexpected error occurred.", details={}

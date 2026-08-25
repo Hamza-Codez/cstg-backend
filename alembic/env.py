@@ -34,6 +34,19 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        # One transaction PER MIGRATION, not one for the whole upgrade.
+        #
+        # Without this, `alembic upgrade head` from base runs every revision in
+        # a single transaction — and PostgreSQL forbids *using* an enum value in
+        # the transaction that added it. Migration 0013 adds PENDING_CUSTOMER
+        # and 0014 writes a CHECK naming it: correct as separate revisions,
+        # still fatal if they share a transaction (UnsafeNewEnumValueUsageError).
+        #
+        # The cost is that a failed upgrade leaves earlier revisions applied
+        # rather than rolling the whole batch back. That is the right trade:
+        # each migration is independently reversible, and alembic_version
+        # records exactly where it stopped.
+        transaction_per_migration=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -44,6 +57,19 @@ def _do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        # One transaction PER MIGRATION, not one for the whole upgrade.
+        #
+        # Without this, `alembic upgrade head` from base runs every revision in
+        # a single transaction — and PostgreSQL forbids *using* an enum value in
+        # the transaction that added it. Migration 0013 adds PENDING_CUSTOMER
+        # and 0014 writes a CHECK naming it: correct as separate revisions,
+        # still fatal if they share a transaction (UnsafeNewEnumValueUsageError).
+        #
+        # The cost is that a failed upgrade leaves earlier revisions applied
+        # rather than rolling the whole batch back. That is the right trade:
+        # each migration is independently reversible, and alembic_version
+        # records exactly where it stopped.
+        transaction_per_migration=True,
     )
     with context.begin_transaction():
         context.run_migrations()

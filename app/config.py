@@ -23,9 +23,23 @@ class Settings(BaseSettings):
 
     env: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+asyncpg://support:support@localhost:5432/support"
+    frontend_origin: str = ""
+
+    @model_validator(mode="after")
+    def _normalize_database_url(self) -> "Settings":
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
+        return self
 
     # Consumed by the SLA monitor from P5 onward (docs/ARCHITECTURE.md §6).
     sla_scan_interval_seconds: int = 30
+
+    # How long after resolution a ticket may still be reopened (T6, spec05 §4).
+    # Unbounded reopen would let a year-old ticket return and immediately
+    # breach against a year-old deadline.
+    reopen_window_days: int = 14
 
     # Signing key for JWTs. The default is convenient locally and is published in
     # this repository, so it is refused outright in production — see the validator
@@ -55,7 +69,23 @@ class Settings(BaseSettings):
         return self
 
     # Attachment limits (docs/API.md §8 requires max size + allowed content types).
+    # Storage backend for attachment bytes (spec03 §3). ``local`` writes under
+    # ``storage_root``; ``memory`` is for tests.
+    #
+    # DEPLOYMENT: ``local`` loses every object on redeploy where the filesystem
+    # is ephemeral (IMPLEMENTATION_V2.md R14). Production needs a persistent
+    # volume mounted at ``storage_root``, or an object-storage backend.
+    storage_backend: Literal["local", "memory"] = "local"
+    storage_root: str = "."
+
+    # A truncated export that does not announce the truncation is a wrong
+    # answer, so the cap is a refusal rather than a silent cut (spec09 §6).
+    export_max_rows: int = 50_000
+
     attachment_max_bytes: int = 10 * 1024 * 1024
+    # Without a count cap, "customers may upload" is an unbounded disk write for
+    # any authenticated account (spec03 §6).
+    attachment_max_per_ticket: int = 20
     attachment_allowed_content_types: tuple[str, ...] = (
         "image/png",
         "image/jpeg",
@@ -67,6 +97,8 @@ class Settings(BaseSettings):
         "application/zip",
         "application/json",
     )
+
+    bulk_max_items: int = 100
 
 
 @lru_cache

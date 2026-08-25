@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import security
@@ -14,6 +14,7 @@ from app.models.enums import Category, CustomerTier, EventType, Priority, Ticket
 from app.models.priority_rule import PriorityRule
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent
+from app.repositories.ticket_repo import TransitionWrites
 from app.services.sla_service import SLAService
 
 
@@ -31,6 +32,15 @@ async def setup_test_data(db_session: AsyncSession) -> Customer:
     return customer
 
 
+async def _active_policy_id(db_session: AsyncSession) -> uuid.UUID:
+    """The policy every ticket must pin to (P17). Seeded by the db_session fixture."""
+    return (
+        await db_session.execute(
+            text("SELECT id FROM sla_policy_version WHERE superseded_at IS NULL LIMIT 1")
+        )
+    ).scalar_one()
+
+
 async def create_overdue_ticket(db_session: AsyncSession, customer_id: uuid.UUID) -> uuid.UUID:
     """Creates a ticket and manually sets its deadline to the past."""
     ticket = Ticket(
@@ -40,6 +50,7 @@ async def create_overdue_ticket(db_session: AsyncSession, customer_id: uuid.UUID
         priority=Priority.LOW,
         customer_id=customer_id,
         deadline=now() - timedelta(hours=1),
+        sla_policy_version_id=await _active_policy_id(db_session),
     )
     db_session.add(ticket)
     await db_session.commit()
@@ -96,6 +107,7 @@ async def test_sla_never_escalates_terminal(db_session: AsyncSession) -> None:
         status=TicketStatus.RESOLVED,
         deadline=now() - timedelta(hours=1),  # overdue
         resolved_at=now() - timedelta(minutes=30),
+        sla_policy_version_id=await _active_policy_id(db_session),
     )
     db_session.add(ticket)
     await db_session.commit()
@@ -131,7 +143,10 @@ async def test_sla_concurrency_race_with_resolve(
             # Use the guarded conditional update that TicketService uses (P3/T2 guard)
             async with uow:
                 await ticket_repo.transition_if(
-                    ticket_id, TicketStatus.OPEN, TicketStatus.RESOLVED, resolved_at=now()
+                    ticket_id,
+                    TicketStatus.OPEN,
+                    TicketStatus.RESOLVED,
+                    writes=TransitionWrites(resolved_at=now()),
                 )
 
     async def simulate_sla_monitor() -> None:

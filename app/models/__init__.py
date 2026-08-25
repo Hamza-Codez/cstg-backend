@@ -1,3 +1,5 @@
+from .assignment_config import AssignmentConfig
+from .attachment import Attachment
 from .base import Base
 from .comment import Comment
 from .customer import Customer
@@ -11,7 +13,11 @@ from .enums import (
     Role,
     TicketStatus,
 )
+from .idempotency import IdempotencyKey
+from .notification_cursor import NotificationCursor
+from .notification_dismissal import NotificationDismissal
 from .priority_rule import PriorityRule
+from .sla_policy import SlaPolicyEntry, SlaPolicyVersion
 from .ticket import Ticket
 from .ticket_event import TicketEvent
 from .user import AppUser
@@ -23,7 +29,12 @@ __all__ = [
     "Ticket",
     "Comment",
     "TicketEvent",
+    "NotificationCursor",
+    "NotificationDismissal",
     "PriorityRule",
+    "SlaPolicyEntry",
+    "SlaPolicyVersion",
+    "AssignmentConfig",
     "Attachment",
     "TicketStatus",
     "Priority",
@@ -33,4 +44,5 @@ __all__ = [
     "CommentType",
     "EventType",
     "ActorType",
+    "IdempotencyKey",
 ]

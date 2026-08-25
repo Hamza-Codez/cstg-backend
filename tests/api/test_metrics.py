@@ -87,13 +87,15 @@ async def test_metrics_aggregation(client: AsyncClient, db_session: AsyncSession
 
     from app.models.ticket import Ticket
 
-    # We must update deadline to be in the past to satisfy breached_only_when_past_deadline
+    # Both timestamps move: `breached_only_when_past_due` checks sla_due_at, not
+    # deadline (P16). With no accrued pause the two are equal, which is INV-13.
     past = now() - timedelta(minutes=5)
     await db_session.execute(
         update(Ticket)
         .where(Ticket.id == t1_id)
         .values(
             deadline=past,
+            sla_due_at=past,
             sla_breached_at=now(),
         )
     )

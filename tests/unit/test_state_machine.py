@@ -10,10 +10,15 @@ def test_legal_transitions() -> None:
 
 def test_illegal_transitions() -> None:
     all_statuses = list(TicketStatus)
+    # P16 grew the table from three rows to six (spec05 §4). The exhaustive
+    # matrix assertion lives in test_lifecycle_v2.py.
     legal_pairs = {
         (TicketStatus.OPEN, TicketStatus.IN_PROGRESS),
         (TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED),
         (TicketStatus.RESOLVED, TicketStatus.CLOSED),
+        (TicketStatus.IN_PROGRESS, TicketStatus.PENDING_CUSTOMER),
+        (TicketStatus.PENDING_CUSTOMER, TicketStatus.IN_PROGRESS),
+        (TicketStatus.RESOLVED, TicketStatus.IN_PROGRESS),
     }
 
     for from_status in all_statuses:

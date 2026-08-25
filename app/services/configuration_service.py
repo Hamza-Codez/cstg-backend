@@ -1,15 +1,19 @@
 """Priority matrix and SLA reference (docs/API.md §11). Admin-only."""
 
+from app.core.authorization import Principal
+from app.core.clock import now
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.domain.errors import BusinessRuleViolation
-from app.domain.sla import duration
 from app.models.enums import Category, CustomerTier, Priority
 from app.schemas.configuration import (
+    AssignmentSettings,
     ConfigurationResponse,
     PriorityMatrixUpdate,
     PriorityRuleEntry,
     SlaDurationEntry,
+    SlaPolicySummary,
 )
+from app.services.sla_policy_service import SlaPolicyService
 
 # Every pair the matrix must define (SLA_ENGINE.md §2).
 REQUIRED_PAIRS = {(tier, category) for tier in CustomerTier for category in Category}
@@ -21,15 +25,29 @@ class ConfigurationService:
 
     async def get_configuration(self) -> ConfigurationResponse:
         rules = await self.uow.priority_rules.list_all()
+        version, durations = await SlaPolicyService(self.uow).active()
+        config = await self.uow.assignment.config()
+
+        entries = [
+            SlaDurationEntry(priority=p, seconds=int(durations[p].total_seconds()))
+            for p in Priority
+        ]
         return ConfigurationResponse(
             priority_rules=[
                 PriorityRuleEntry(tier=r.tier, category=r.category, priority=r.priority)
                 for r in rules
             ],
-            sla_durations=[
-                SlaDurationEntry(priority=p, seconds=int(duration(p).total_seconds()))
-                for p in Priority
-            ],
+            sla_durations=entries,
+            assignment=AssignmentSettings(
+                strategy=config.strategy if config else "MANUAL",
+                auto_assign_on_create=config.auto_assign_on_create if config else False,
+            ),
+            sla_policy=SlaPolicySummary(
+                version_id=version.id,
+                activated_at=version.activated_at,
+                note=version.note,
+                durations=entries,
+            ),
         )
 
     async def replace_priority_matrix(self, data: PriorityMatrixUpdate) -> ConfigurationResponse:
@@ -52,4 +70,22 @@ class ConfigurationService:
         await self.uow.priority_rules.replace_all(
             [(r.tier, r.category, r.priority) for r in data.rules]
         )
+        return await self.get_configuration()
+
+    async def set_assignment(
+        self, principal: Principal, strategy: str, auto_assign_on_create: bool
+    ) -> ConfigurationResponse:
+        """Change how new tickets are routed.
+
+        Turning automation on is the only thing that changes behaviour; the
+        migration shipped it off (spec07 §2).
+        """
+        config = await self.uow.assignment.config()
+        if config is None:
+            raise BusinessRuleViolation("Assignment configuration is missing")
+
+        config.strategy = strategy
+        config.auto_assign_on_create = auto_assign_on_create
+        config.updated_by = principal.id
+        config.updated_at = now()
         return await self.get_configuration()

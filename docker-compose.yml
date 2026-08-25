@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+      POSTGRES_DB: support
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_DATABASE_URL=postgresql+asyncpg://support:support@db:5432/support
+      - APP_ENV=development
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    # You can verify health directly using curl:
+    # curl -f http://localhost:8000/health
+    # curl -f http://localhost:8000/health/db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  pgdata:

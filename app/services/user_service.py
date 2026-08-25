@@ -33,10 +33,25 @@ class UserService:
         self.uow.users.insert(user)
         return user
 
-    async def set_active(self, user_id: uuid.UUID, data: UserUpdate) -> AppUser:
+    async def update_staff(self, user_id: uuid.UUID, data: UserUpdate) -> AppUser:
+        """Partial update: activation, capacity, automation opt-out.
+
+        Only fields present in the request are touched, so changing a ceiling
+        cannot accidentally reactivate someone.
+
+        Deactivating still never removes them and never reassigns their existing
+        work — that is a dispatcher decision (docs/API.md §10).
+        """
         user = await self.uow.users.get(user_id)
         if user is None:
             raise NotFound("User not found")
 
-        user.is_active = data.is_active
+        fields = data.model_dump(exclude_unset=True)
+        if "is_active" in fields and fields["is_active"] is not None:
+            user.is_active = fields["is_active"]
+        if "max_open_tickets" in fields:
+            # Explicit null clears the ceiling — "no limit" is a real setting.
+            user.max_open_tickets = fields["max_open_tickets"]
+        if "accepts_auto_assignment" in fields and fields["accepts_auto_assignment"] is not None:
+            user.accepts_auto_assignment = fields["accepts_auto_assignment"]
         return user

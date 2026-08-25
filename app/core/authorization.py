@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import Request
 
 from app.domain.errors import Forbidden, NotFound, Unauthenticated
-from app.models.enums import ActorType, Role
+from app.models.enums import ActorType, CommentType, Role
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,30 @@ def authorize_ticket_access(principal: Principal, ticket: Any) -> None:
     if principal.type == ActorType.CUSTOMER:
         if ticket.customer_id != principal.id:
             raise NotFound("Ticket not found.")
+        return
+
+    if principal.role == Role.AGENT:
+        if ticket.assignee_id != principal.id:
+            raise NotFound("Ticket not found.")
+        return
+
+    raise Forbidden("Role not permitted for this action.")
+
+
+def authorize_comment_authoring(principal: Principal, ticket: Any, type: CommentType) -> None:
+    """Who may author what on this ticket.
+
+    A customer may post PUBLIC_REPLY on their own ticket and nothing else. Staff
+    authorship is unchanged from v1 (AUTHORIZATION.md §3).
+    """
+    if principal.role in (Role.ADMIN, Role.DISPATCHER):
+        return
+
+    if principal.type == ActorType.CUSTOMER:
+        if ticket.customer_id != principal.id:
+            raise NotFound("Ticket not found.")
+        if type != CommentType.PUBLIC_REPLY:
+            raise Forbidden("Customers can only post public replies.")
         return
 
     if principal.role == Role.AGENT:

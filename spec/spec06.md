@@ -82,8 +82,9 @@ the backfill is accurate, not approximate. `NOT NULL` is set after backfill.
 
 ```python
 def duration(priority: Priority, policy: Mapping[Priority, timedelta]) -> timedelta: ...
-def deadline_for(created_at: datetime, priority: Priority,
-                 policy: Mapping[Priority, timedelta]) -> datetime: ...
+def deadline_for(
+    created_at: datetime, priority: Priority, policy: Mapping[Priority, timedelta]
+) -> datetime: ...
 ```
 
 `domain/` stays pure — it receives the policy, it does not load it. The service reads the active

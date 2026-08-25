@@ -4,6 +4,9 @@ from enum import StrEnum
 class TicketStatus(StrEnum):
     OPEN = "OPEN"
     IN_PROGRESS = "IN_PROGRESS"
+    # P16: the clock stops here — the desk is not the blocker. Added by
+    # migration 0013.
+    PENDING_CUSTOMER = "PENDING_CUSTOMER"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
 
@@ -46,6 +49,9 @@ class EventType(StrEnum):
     ASSIGNMENT = "ASSIGNMENT"
     COMMENT = "COMMENT"
     SLA_BREACH = "SLA_BREACH"
+    # P14: attachment upload was the one state change with no audit record,
+    # so INV-5 did not hold for it. Added by migration 0010.
+    ATTACHMENT = "ATTACHMENT"
 
 
 class ActorType(StrEnum):

@@ -148,19 +148,28 @@ async def test_agent_cannot_assign(client: AsyncClient, db_session: AsyncSession
 
 @pytest.mark.asyncio
 @pytest.mark.db
-async def test_customer_cannot_author_comments(
+async def test_customer_comment_authoring_matrix(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """Matrix: CUSTOMER authors no comments in v1."""
+    """Matrix: CUSTOMER may author PUBLIC_REPLY on own ticket, but never INTERNAL_NOTE."""
     ticket_id, t_cust, _, _, _ = await _ticket_in_state(
         client, db_session, TicketStatus.OPEN, "mx7"
     )
+    # Allowed
     response = await client.post(
         f"/api/v1/tickets/{ticket_id}/comments",
         json={"type": "PUBLIC_REPLY", "body": "hello"},
         headers={"Authorization": f"Bearer {t_cust}"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
+
+    # Denied
+    response2 = await client.post(
+        f"/api/v1/tickets/{ticket_id}/comments",
+        json={"type": "INTERNAL_NOTE", "body": "secret"},
+        headers={"Authorization": f"Bearer {t_cust}"},
+    )
+    assert response2.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -179,3 +188,55 @@ async def test_non_admin_cannot_read_metrics(client: AsyncClient, db_session: As
         "/api/v1/metrics/overview", headers={"Authorization": f"Bearer {t_admin}"}
     )
     assert ok.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_attachment_upload_and_list_matrix(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Matrix: upload/list attachments (P14, spec03 §5).
+
+    AUTHORIZATION.md §3's "Upload attachment | ✗ (v2)" row becomes "own" for
+    CUSTOMER. Every row here is really a statement about the parent ticket —
+    INV-12 gives attachments no permission of their own.
+    """
+    import io
+
+    ticket_id, t_cust, t_agent, t_disp, t_admin = await _ticket_in_state(
+        client, db_session, TicketStatus.OPEN, "mxatt"
+    )
+
+    def payload() -> dict:
+        return {"file": ("m.txt", io.BytesIO(b"x"), "text/plain")}
+
+    async def upload(token: str) -> int:
+        resp = await client.post(
+            f"/api/v1/tickets/{ticket_id}/attachments",
+            files=payload(),
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return resp.status_code
+
+    async def listing(token: str) -> int:
+        resp = await client.get(
+            f"/api/v1/tickets/{ticket_id}/attachments",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return resp.status_code
+
+    # Owning customer, dispatcher and admin may upload and list.
+    assert await upload(t_cust) == 201
+    assert await upload(t_disp) == 201
+    assert await upload(t_admin) == 201
+    for token in (t_cust, t_disp, t_admin):
+        assert await listing(token) == 200
+
+    # The agent is not assigned to this OPEN ticket, so it is hidden from them
+    # entirely — 404, never 403 (INV-9/INV-12).
+    assert await upload(t_agent) == 404
+    assert await listing(t_agent) == 404
+
+    # An unauthenticated caller is rejected before any of this is considered.
+    anon = await client.get(f"/api/v1/tickets/{ticket_id}/attachments")
+    assert anon.status_code == 401

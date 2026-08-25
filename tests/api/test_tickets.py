@@ -151,18 +151,30 @@ async def test_transition_unauthorized(client: AsyncClient, db_session: AsyncSes
         headers={"Authorization": f"Bearer {token2}"},
     )
 
-    # 403, not 404: a customer may drive no transition on ANY ticket, so this is a
-    # role-level denial (API.md §2 "authenticated but not permitted"), decided
-    # before ownership is ever considered. It leaks nothing — the same 403 comes
-    # back for a ticket id that does not exist at all, asserted below.
-    assert resp2.status_code == 403
+    # 404, not 403. From P16 a customer CAN drive two transitions (T5 resume,
+    # T6 reopen), so the coarse gate admits them and the denial is decided
+    # object-level instead: customer2 cannot see this ticket, and INV-9 says a
+    # hidden resource is 404.
+    #
+    # The no-leak property is unchanged and still asserted below — a ticket id
+    # that does not exist returns the same 404, so the two are indistinguishable.
+    assert resp2.status_code == 404
 
     missing = await client.post(
         f"/api/v1/tickets/{uuid.uuid4()}/transitions",
         json={"to": "IN_PROGRESS"},
         headers={"Authorization": f"Bearer {token2}"},
     )
-    assert missing.status_code == 403, "role denial must not reveal whether the ticket exists"
+    assert missing.status_code == 404, "denial must not reveal whether the ticket exists"
+
+    # On a ticket they DO own, the role gate is what refuses — a customer may
+    # never assert that work was done.
+    own = await client.post(
+        f"/api/v1/tickets/{ticket_id}/transitions",
+        json={"to": "IN_PROGRESS"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert own.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -218,3 +230,29 @@ async def test_transition_guard_fails(client: AsyncClient, db_session: AsyncSess
     )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "BUSINESS_RULE_VIOLATION"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_create_ticket_idempotency(client: AsyncClient, db_session: AsyncSession) -> None:
+    customer = await create_customer(db_session, "idempotent@example.com")
+    await seed_priority_rules(db_session)
+    token = await get_auth_token(client, customer.email)
+
+    key = str(uuid.uuid4())
+    payload = {"subject": "Idempotent Ticket", "body": "My issue", "category": "GENERAL"}
+    headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": key}
+
+    resp1 = await client.post("/api/v1/tickets", json=payload, headers=headers)
+    assert resp1.status_code == 201
+    ticket_id_1 = resp1.json()["id"]
+
+    resp2 = await client.post("/api/v1/tickets", json=payload, headers=headers)
+    assert resp2.status_code == 201
+    ticket_id_2 = resp2.json()["id"]
+
+    assert ticket_id_1 == ticket_id_2
+    assert resp1.json() == resp2.json()
+
+    result = await db_session.execute(select(Ticket).where(Ticket.subject == "Idempotent Ticket"))
+    assert len(result.scalars().all()) == 1

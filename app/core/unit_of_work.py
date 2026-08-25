@@ -4,11 +4,15 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.assignment_repo import AssignmentRepository
 from app.repositories.attachment_repo import AttachmentRepository
 from app.repositories.comment_repo import CommentRepository
 from app.repositories.customer_repo import CustomerRepository
 from app.repositories.event_repo import TicketEventRepository
+from app.repositories.notification_repo import NotificationRepository
 from app.repositories.priority_rule_repo import PriorityRuleRepository
+from app.repositories.saved_view_repo import SavedViewRepository
+from app.repositories.sla_policy_repo import SlaPolicyRepository
 from app.repositories.ticket_repo import TicketRepository
 from app.repositories.user_repo import UserRepository
 
@@ -28,6 +32,19 @@ class SqlAlchemyUnitOfWork:
         self.users = UserRepository(session)
         self.comments = CommentRepository(session)
         self.attachments = AttachmentRepository(session)
+        self.saved_views = SavedViewRepository(session)
+        self.sla_policies = SlaPolicyRepository(session)
+        self.assignment = AssignmentRepository(session)
+        self.notifications = NotificationRepository(session)
+
+    async def flush(self) -> None:
+        """Push pending writes without committing.
+
+        Lets a service surface a constraint violation as a domain error inside
+        its own transaction, rather than having it escape from the commit at the
+        router boundary where the context is gone.
+        """
+        await self._session.flush()
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
         # FastAPI's session dependency creates a session per request.

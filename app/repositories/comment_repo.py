@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.comment import Comment
 from app.models.enums import CommentType
@@ -20,7 +21,12 @@ class CommentRepository:
         Fetch comments for a ticket.
         If is_customer is True, only PUBLIC_REPLY comments are returned.
         """
-        stmt = select(Comment).where(Comment.ticket_id == ticket_id).order_by(Comment.created_at)
+        stmt = (
+            select(Comment)
+            .options(joinedload(Comment.user), joinedload(Comment.customer))
+            .where(Comment.ticket_id == ticket_id)
+            .order_by(Comment.created_at)
+        )
 
         if is_customer:
             stmt = stmt.where(Comment.type == CommentType.PUBLIC_REPLY)

@@ -15,6 +15,7 @@ from app.api.deps import get_current_principal, get_db
 from app.core.authorization import require_roles
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.enums import Role
+from app.repositories.assignment_repo import AssignmentRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import UserCreate, UserSummary, UserUpdate
 from app.services.user_service import UserService
@@ -39,7 +40,20 @@ async def list_users(
     is_active: Annotated[bool | None, Query()] = None,
 ) -> dict[str, list[UserSummary]]:
     users = await UserRepository(session).list_staff(role=role, is_active=is_active)
-    return {"items": [UserSummary.model_validate(u, from_attributes=True) for u in users]}
+    # One grouped count for the whole directory rather than one query per agent,
+    # so the assign picker can show workload without an N+1.
+    loads = await AssignmentRepository(session).open_counts()
+    return {
+        "items": [
+            UserSummary.model_validate(
+                {
+                    **{c.name: getattr(u, c.name) for c in u.__table__.columns},
+                    "open_ticket_count": loads.get(u.id, 0),
+                }
+            )
+            for u in users
+        ]
+    }
 
 
 async def get_user_service(
@@ -77,5 +91,5 @@ async def update_user(
 ) -> UserSummary:
     """Activate or deactivate. A deactivated agent can no longer be assigned (INV-8)."""
     async with service.uow:
-        user = await service.set_active(user_id, data)
+        user = await service.update_staff(user_id, data)
     return UserSummary.model_validate(user, from_attributes=True)

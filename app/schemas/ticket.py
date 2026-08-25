@@ -18,7 +18,19 @@ class TicketResponse(BaseModel):
     category: Category
     priority: Priority
     status: TicketStatus
+    # The frozen original promise (INV-1/INV-2). Kept in the response as the
+    # record of "what we committed to", but it is NOT what a countdown reads —
+    # see sla_due_at (spec05 §8).
     deadline: datetime
+    # The current effective due time. This is the countdown's source.
+    sla_due_at: datetime
+    sla_paused_at: datetime | None
+    sla_paused_seconds: int
+    reopen_count: int
+    #: The policy this ticket's window was computed under (INV-15). Lets the
+    #: UI explain a frozen deadline rather than leave it looking like a bug.
+    sla_policy_version_id: uuid.UUID
+    resolved_at: datetime | None
     escalation_level: int
     sla_breached_at: datetime | None
     created_at: datetime
@@ -55,6 +67,11 @@ class TicketDetailResponse(TicketResponse):
     body: str
     assignee: AssigneeSummary | None = None
     timeline: list[TicketEventResponse] = Field(default_factory=list)
+    #: The duration this ticket's priority carried under its pinned policy.
+    #: Embedded so the detail screen can say "2 hours, under the policy active
+    #: when this was created" without a second request.
+    sla_policy_seconds: int | None = None
+    sla_policy_activated_at: datetime | None = None
 
 
 class PaginatedTicketResponse(BaseModel):
@@ -68,3 +85,7 @@ class TransitionRequest(BaseModel):
 
 class AssignmentRequest(BaseModel):
     assignee_id: uuid.UUID
+    #: Capacity is a routing heuristic, not an invariant — a dispatcher handling
+    #: a CRITICAL outage must be able to say "anyway" (spec07 §6). Recorded in
+    #: the ASSIGNMENT event's detail.
+    override_capacity: bool = False

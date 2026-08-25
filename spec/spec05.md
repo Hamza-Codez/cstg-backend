@@ -89,9 +89,16 @@ never a breach candidate, so it should not occupy the index at all.
 | `0013_lifecycle_v2` | The columns, the backfill, both CHECKs, and the index swap |
 
 This split is mandatory, not stylistic. PostgreSQL 16 allows `ADD VALUE` inside a transaction but
-forbids **using** the new value in that same transaction, and Alembic wraps each migration in one.
-`paused_iff_pending_customer` uses the literal `'PENDING_CUSTOMER'`, so a single combined migration
-fails at runtime — not at review, and not in a way the autogenerate diff would reveal.
+forbids **using** the new value in that same transaction. `paused_iff_pending_customer` uses the
+literal `'PENDING_CUSTOMER'`, so a single combined migration fails at runtime — not at review, and
+not in a way the autogenerate diff would reveal.
+
+> **The split is necessary but NOT sufficient.** Alembic's default wraps an entire `upgrade` in one
+> transaction, so two correctly-separated revisions still share it when run in the same batch —
+> which is what a fresh database and the test harness always do. `alembic/env.py` must set
+> `transaction_per_migration=True`, or `alembic upgrade head` from base dies with
+> `UnsafeNewEnumValueUsageError` while stepping one revision at a time appears to work. This was
+> found by the test suite, not by review.
 
 Both are reversible, with the same honest failure mode: `0013`'s down path must refuse to run if any
 ticket is `PENDING_CUSTOMER` or has `reopen_count > 0`, because that state has no representation in
@@ -147,6 +154,7 @@ Pure, in `app/domain/sla.py`, no I/O:
 ```python
 def accrue_pause(paused_at: datetime, now: datetime, paused_seconds: int) -> int:
     """Total paused seconds after a pause that began at `paused_at` ends at `now`."""
+
 
 def due_at(deadline: datetime, paused_seconds: int) -> datetime:
     """The effective due time. INV-13: sla_due_at == deadline + paused_seconds."""
