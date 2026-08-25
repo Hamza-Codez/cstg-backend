@@ -196,7 +196,7 @@ async def test_inv17_scope_is_dynamic_so_an_unassigned_agent_stops_seeing_it(
 async def test_self_authored_events_are_excluded(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """"You resolved a ticket" is not news."""
+    """ "You resolved a ticket" is not news."""
     customer = await create_customer(db_session, "self_c@example.com")
     await seed_priority_rules(db_session)
     t_cust = await get_auth_token(client, customer.email)
@@ -267,9 +267,7 @@ async def test_marking_read_clears_the_badge_and_new_events_raise_it(
 
 
 @pytest.mark.db
-async def test_the_cursor_only_moves_forward(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_the_cursor_only_moves_forward(client: AsyncClient, db_session: AsyncSession) -> None:
     """A client must not resurrect old notifications by sending a past time."""
     customer = await create_customer(db_session, "fwd_c@example.com")
     agent = await create_agent(db_session, "fwd_a@example.com")

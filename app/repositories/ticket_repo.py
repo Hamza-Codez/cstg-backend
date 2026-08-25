@@ -48,9 +48,7 @@ def filter_predicates(filters: TicketFilters) -> list[ColumnElement[bool]]:
     where: list[ColumnElement[bool]] = []
 
     if filters.q is not None:
-        where.append(
-            Ticket.search_vector.op("@@")(func.websearch_to_tsquery("english", filters.q))
-        )
+        where.append(Ticket.search_vector.op("@@")(func.websearch_to_tsquery("english", filters.q)))
     if filters.status is not None:
         where.append(Ticket.status == filters.status)
     if filters.priority is not None:
@@ -292,7 +290,7 @@ class TicketRepository:
                     < tuple_(
                         literal(cursor.rank),
                         literal(cursor.created_at),
-                        literal(cursor.ticket_id),
+                        literal(cursor.row_id),
                     )
                 )
             else:
@@ -300,7 +298,7 @@ class TicketRepository:
                 # which PostgreSQL can satisfy from the (created_at, id) ordering.
                 stmt = stmt.where(
                     tuple_(Ticket.created_at, Ticket.id)
-                    < tuple_(literal(cursor.created_at), literal(cursor.ticket_id))
+                    < tuple_(literal(cursor.created_at), literal(cursor.row_id))
                 )
 
         stmt = stmt.limit(limit)

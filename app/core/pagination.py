@@ -31,10 +31,15 @@ class InvalidCursor(ValueError):
 
 @dataclass(frozen=True)
 class Cursor:
-    """The sort key of the last row on the previous page."""
+    """The sort key of the last row on the previous page.
+
+    `row_id`, not `ticket_id`: a keyset cursor carries whatever row the query
+    returned. Ticket listing puts a ticket id here; the notification feed puts
+    a `ticket_event` id. The wire format is the same either way.
+    """
 
     created_at: datetime
-    ticket_id: uuid.UUID
+    row_id: uuid.UUID
     #: Present only for search results. Its presence must match the query shape —
     #: see ``require_shape``.
     rank: float | None = None
@@ -44,10 +49,8 @@ class Cursor:
         return self.rank is not None
 
 
-def encode_cursor(
-    created_at: datetime, ticket_id: uuid.UUID, rank: float | None = None
-) -> str:
-    parts = [created_at.isoformat(), str(ticket_id)]
+def encode_cursor(created_at: datetime, row_id: uuid.UUID, rank: float | None = None) -> str:
+    parts = [created_at.isoformat(), str(row_id)]
     if rank is not None:
         parts.insert(0, repr(rank))
     raw = "|".join(parts).encode()

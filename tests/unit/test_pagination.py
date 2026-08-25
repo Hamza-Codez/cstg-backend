@@ -19,14 +19,14 @@ TID = uuid.UUID("11111111-2222-3333-4444-555555555555")
 
 def test_two_part_cursor_round_trips() -> None:
     decoded = decode_cursor(encode_cursor(NOW, TID))
-    assert decoded == Cursor(created_at=NOW, ticket_id=TID, rank=None)
+    assert decoded == Cursor(created_at=NOW, row_id=TID, rank=None)
     assert decoded.is_search is False
 
 
 def test_three_part_search_cursor_round_trips() -> None:
     decoded = decode_cursor(encode_cursor(NOW, TID, rank=0.4218750298023224))
     assert decoded.created_at == NOW
-    assert decoded.ticket_id == TID
+    assert decoded.row_id == TID
     # repr() round-trips a float exactly, so paging never drifts on the sort key.
     assert decoded.rank == 0.4218750298023224
     assert decoded.is_search is True
