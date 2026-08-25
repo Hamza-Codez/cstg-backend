@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 #: The development signing key. Published in this repository, so it is a
@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     )
 
     env: Literal["development", "test", "production"] = "development"
-    database_url: str = "postgresql+asyncpg://support:support@localhost:5432/support"
+    database_url: str = Field(
+        "postgresql+asyncpg://support:support@localhost:5432/support",
+        validation_alias=AliasChoices("DATABASE_URL", "APP_DATABASE_URL"),
+    )
     frontend_origin: str = ""
 
     @model_validator(mode="after")
