@@ -9,6 +9,7 @@ from app.repositories.attachment_repo import AttachmentRepository
 from app.repositories.comment_repo import CommentRepository
 from app.repositories.customer_repo import CustomerRepository
 from app.repositories.event_repo import TicketEventRepository
+from app.repositories.notification_repo import NotificationRepository
 from app.repositories.priority_rule_repo import PriorityRuleRepository
 from app.repositories.saved_view_repo import SavedViewRepository
 from app.repositories.sla_policy_repo import SlaPolicyRepository
@@ -34,6 +35,7 @@ class SqlAlchemyUnitOfWork:
         self.saved_views = SavedViewRepository(session)
         self.sla_policies = SlaPolicyRepository(session)
         self.assignment = AssignmentRepository(session)
+        self.notifications = NotificationRepository(session)
 
     async def flush(self) -> None:
         """Push pending writes without committing.

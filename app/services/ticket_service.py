@@ -26,6 +26,7 @@ from app.models.enums import ActorType, EventType, Role, TicketStatus
 from app.models.ticket import Ticket
 from app.models.ticket_event import TicketEvent
 from app.repositories.ticket_repo import TransitionWrites
+from app.repositories.ticket_scope import scope_for
 from app.schemas.ticket import TicketCreate
 from app.schemas.ticket_filters import TicketFilters, authorize_filters
 
@@ -312,16 +313,14 @@ class TicketService:
             except InvalidCursor as exc:
                 raise ValidationError(str(exc)) from exc
 
-        scope: dict[str, uuid.UUID] = {}
-        if principal.type == ActorType.CUSTOMER:
-            scope["customer_id"] = principal.id
-        elif principal.role == Role.AGENT:
-            scope["assignee_id"] = principal.id
+        # The single definition of read scope, shared with the notification
+        # query (spec08 §4). A copy here would be free to drift from it.
+        scope = scope_for(principal)
 
         # One extra row tells us whether a further page exists without a COUNT.
         rows = list(
             await self.uow.tickets.list_scoped(
-                **scope,
+                **scope.columns(),
                 filters=filters,
                 limit=limit + 1,
                 cursor=cursor,

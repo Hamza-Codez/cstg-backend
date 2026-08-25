@@ -14,6 +14,7 @@ from .enums import (
     TicketStatus,
 )
 from .idempotency import IdempotencyKey
+from .notification_cursor import NotificationCursor
 from .priority_rule import PriorityRule
 from .sla_policy import SlaPolicyEntry, SlaPolicyVersion
 from .ticket import Ticket
@@ -27,6 +28,7 @@ __all__ = [
     "Ticket",
     "Comment",
     "TicketEvent",
+    "NotificationCursor",
     "PriorityRule",
     "SlaPolicyEntry",
     "SlaPolicyVersion",
