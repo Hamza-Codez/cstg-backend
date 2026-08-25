@@ -215,9 +215,7 @@ async def claim_ticket(
     # (resume) and T6 (reopen). Which of T1-T6 each role may actually drive is
     # decided per-transition from the table in the service, so widening here
     # grants nothing on its own — a customer attempting T1/T2/T3 still gets 403.
-    dependencies=[
-        Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))
-    ],
+    dependencies=[Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))],
 )
 async def transition_ticket(
     ticket_id: uuid.UUID,
@@ -302,9 +300,7 @@ async def list_comments(
     # P14: customers may upload to their own tickets — AUTHORIZATION.md §3
     # previously marked this "v2". The coarse gate admits every role; the
     # object-level gate in the service decides which ticket (INV-12).
-    dependencies=[
-        Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))
-    ],
+    dependencies=[Depends(require_roles(Role.CUSTOMER, Role.AGENT, Role.DISPATCHER, Role.ADMIN))],
 )
 async def upload_attachment(
     ticket_id: uuid.UUID,

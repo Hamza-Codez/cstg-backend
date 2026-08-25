@@ -22,9 +22,7 @@ class AppUser(Base, UUIDMixin):
     max_open_tickets: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: Lets an agent stay assignable by a dispatcher while automation skips
     #: them (part-time, another rotation, on leave).
-    accepts_auto_assignment: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
+    accepts_auto_assignment: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=clock.now, nullable=False
     )

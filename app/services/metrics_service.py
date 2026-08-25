@@ -65,9 +65,7 @@ def _metrics(data: dict[str, Any]) -> GroupMetrics:
         closed=data["closed"],
         breached_open=data["breached_open"],
         breach_rate=_rate(data["breached_total"], data["total"]),
-        avg_resolution_seconds=_average(
-            data["resolution_seconds_sum"], data["resolution_count"]
-        ),
+        avg_resolution_seconds=_average(data["resolution_seconds_sum"], data["resolution_count"]),
         avg_working_seconds=_average(data["working_seconds_sum"], data["resolution_count"]),
         sla_met_rate=_rate(data["sla_met_count"], data["resolution_count"]),
     )
@@ -205,9 +203,7 @@ class MetricsService:
                     pending_customer=row["pending_customer"],
                     resolved_in_period=row["resolved_in_period"],
                     sla_met_rate=_rate(row["sla_met"], row["resolved_in_period"]),
-                    avg_working_seconds=_average(
-                        row["working_seconds_sum"], row["working_count"]
-                    ),
+                    avg_working_seconds=_average(row["working_seconds_sum"], row["working_count"]),
                     current_load_pct=_load(row),
                 )
                 for row in rows

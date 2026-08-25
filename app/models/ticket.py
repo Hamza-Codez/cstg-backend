@@ -47,9 +47,7 @@ class Ticket(Base, UUIDMixin, TimestampMixin):
         default=lambda ctx: ctx.get_current_parameters()["deadline"],
         nullable=False,
     )
-    sla_paused_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    sla_paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sla_paused_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     reopen_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

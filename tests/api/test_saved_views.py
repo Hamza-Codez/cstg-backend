@@ -24,9 +24,7 @@ def auth(token: str) -> dict[str, str]:
 
 
 @pytest.mark.db
-async def test_create_list_and_delete_a_view(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_create_list_and_delete_a_view(client: AsyncClient, db_session: AsyncSession) -> None:
     dispatcher = await create_dispatcher(db_session, "sv_disp@example.com")
     await seed_priority_rules(db_session)
     token = await get_auth_token(client, dispatcher.email)
@@ -131,9 +129,7 @@ async def test_unknown_filter_key_is_rejected(
 
 
 @pytest.mark.db
-async def test_customers_have_no_saved_views(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_customers_have_no_saved_views(client: AsyncClient, db_session: AsyncSession) -> None:
     customer = await create_customer(db_session, "sv_cust@example.com")
     await seed_priority_rules(db_session)
     token = await get_auth_token(client, customer.email)

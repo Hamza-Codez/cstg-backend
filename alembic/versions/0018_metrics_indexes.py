@@ -28,8 +28,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.execute(
-        "CREATE INDEX ix_ticket_resolved_at ON ticket (resolved_at) "
-        "WHERE resolved_at IS NOT NULL"
+        "CREATE INDEX ix_ticket_resolved_at ON ticket (resolved_at) WHERE resolved_at IS NOT NULL"
     )
     op.execute(
         "CREATE INDEX ix_ticket_breached_at ON ticket (sla_breached_at) "

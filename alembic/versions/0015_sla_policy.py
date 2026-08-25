@@ -114,8 +114,7 @@ def upgrade() -> None:
 
     bind.execute(
         sa.text(
-            "UPDATE ticket SET sla_policy_version_id = :vid "
-            "WHERE sla_policy_version_id IS NULL"
+            "UPDATE ticket SET sla_policy_version_id = :vid WHERE sla_policy_version_id IS NULL"
         ),
         {"vid": version_id},
     )

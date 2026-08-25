@@ -144,9 +144,7 @@ async def test_a_range_over_the_bucket_cap_is_refused(
 
 
 @pytest.mark.db
-async def test_an_inverted_range_is_refused(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_an_inverted_range_is_refused(client: AsyncClient, db_session: AsyncSession) -> None:
     admin = await create_admin(db_session, "ts_inv@example.com")
     t_admin = await get_auth_token(client, admin.email)
     at = datetime(2026, 1, 1, tzinfo=UTC)
@@ -175,8 +173,9 @@ async def test_an_unknown_metric_is_rejected_by_the_schema(
 
     resp = await client.get(TIMESERIES, params={"metric": "profit"}, headers=auth(t_admin))
     assert resp.status_code == 400
-    assert (await client.get(TIMESERIES, params={"bucket": "fortnight"}, headers=auth(t_admin))
-            ).status_code == 400
+    assert (
+        await client.get(TIMESERIES, params={"bucket": "fortnight"}, headers=auth(t_admin))
+    ).status_code == 400
 
 
 # ── Per-agent ──────────────────────────────────────────────────────────────────
@@ -423,9 +422,7 @@ async def test_export_reports_the_pause_columns(
     t_admin = await get_auth_token(client, admin.email)
 
     tid = await _open_ticket(client, t_cust)
-    await db_session.execute(
-        update(Ticket).where(Ticket.id == tid).values(sla_paused_seconds=3600)
-    )
+    await db_session.execute(update(Ticket).where(Ticket.id == tid).values(sla_paused_seconds=3600))
     await db_session.commit()
 
     row = _rows((await client.get(EXPORT, headers=auth(t_admin))).text)[0]

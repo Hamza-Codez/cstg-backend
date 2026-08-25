@@ -191,18 +191,14 @@ async def test_assignment_configuration_is_admin_only(
         await client.put("/api/v1/configuration/assignment", json=body, headers=auth(t_disp))
     ).status_code == 403
 
-    updated = await client.put(
-        "/api/v1/configuration/assignment", json=body, headers=auth(t_admin)
-    )
+    updated = await client.put("/api/v1/configuration/assignment", json=body, headers=auth(t_admin))
     assert updated.status_code == 200
     assert updated.json()["assignment"]["strategy"] == "ROUND_ROBIN"
     assert updated.json()["assignment"]["auto_assign_on_create"] is True
 
 
 @pytest.mark.db
-async def test_unknown_strategy_is_rejected(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_unknown_strategy_is_rejected(client: AsyncClient, db_session: AsyncSession) -> None:
     admin = await create_admin(db_session, "cfgbad_adm@example.com")
     t_admin = await get_auth_token(client, admin.email)
 

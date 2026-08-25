@@ -37,9 +37,7 @@ _AUTHORIZED_ROLES: dict[tuple[TicketStatus, TicketStatus], frozenset[Role]] = {
     (TicketStatus.RESOLVED, TicketStatus.CLOSED): frozenset(
         {Role.AGENT, Role.DISPATCHER, Role.ADMIN}
     ),
-    (TicketStatus.IN_PROGRESS, TicketStatus.PENDING_CUSTOMER): frozenset(
-        {Role.AGENT, Role.ADMIN}
-    ),
+    (TicketStatus.IN_PROGRESS, TicketStatus.PENDING_CUSTOMER): frozenset({Role.AGENT, Role.ADMIN}),
     (TicketStatus.PENDING_CUSTOMER, TicketStatus.IN_PROGRESS): frozenset(
         {Role.AGENT, Role.ADMIN, Role.CUSTOMER}
     ),

@@ -37,9 +37,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "saved_view",
-        sa.Column(
-            "id", sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")
-        ),
+        sa.Column("id", sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column(
             "owner_id",
             sa.Uuid(),

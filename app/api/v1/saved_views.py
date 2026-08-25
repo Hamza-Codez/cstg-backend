@@ -36,9 +36,7 @@ async def get_saved_view_service(
 # exclude_none: a stored view holds only the filters that were set, but
 # TicketFilters re-serialises every field. Emitting nulls would put the
 # literal string "null" in a client URL that round-trips them.
-@router.get(
-    "", response_model=dict[str, list[SavedViewResponse]], response_model_exclude_none=True
-)
+@router.get("", response_model=dict[str, list[SavedViewResponse]], response_model_exclude_none=True)
 async def list_saved_views(
     principal: Annotated[Principal, Depends(get_current_principal)],
     service: Annotated[SavedViewService, Depends(get_saved_view_service)],

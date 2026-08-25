@@ -29,14 +29,10 @@ def test_met_at_deadline_vs_breach_after() -> None:
     assert is_sla_met(resolved_at=deadline, due=deadline) is True
 
     # Not met after deadline
-    assert (
-        is_sla_met(resolved_at=deadline + timedelta(seconds=1), due=deadline) is False
-    )
+    assert is_sla_met(resolved_at=deadline + timedelta(seconds=1), due=deadline) is False
 
     # Met before deadline
-    assert (
-        is_sla_met(resolved_at=deadline - timedelta(minutes=1), due=deadline) is True
-    )
+    assert is_sla_met(resolved_at=deadline - timedelta(minutes=1), due=deadline) is True
 
     # Not met if unresolved (None)
     assert is_sla_met(resolved_at=None, due=deadline) is False

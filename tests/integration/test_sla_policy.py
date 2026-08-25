@@ -194,9 +194,7 @@ async def test_concurrent_activations_leave_one_winner(
 
 
 @pytest.mark.db
-async def test_a_partial_policy_is_refused(
-    db_session: AsyncSession, session_factory: Any
-) -> None:
+async def test_a_partial_policy_is_refused(db_session: AsyncSession, session_factory: Any) -> None:
     """Totality, the same rule the priority matrix follows (spec06 §4)."""
     admin = await _admin(db_session, "policy_admin6@example.com")
     partial = {Priority.CRITICAL: 3600, Priority.HIGH: 7200}

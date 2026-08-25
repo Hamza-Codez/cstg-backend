@@ -26,9 +26,7 @@ class SlaPolicyVersion(Base, UUIDMixin):
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
     #: NULL for the seeded v1 policy — no admin authored it.
-    created_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("app_user.id"), nullable=True
-    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: What this version is for, shown in history. The difference between a

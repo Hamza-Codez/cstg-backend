@@ -16,30 +16,22 @@ class SavedViewRepository:
 
     async def list_for_owner(self, owner_id: uuid.UUID) -> Sequence[SavedView]:
         stmt = (
-            select(SavedView)
-            .where(SavedView.owner_id == owner_id)
-            .order_by(SavedView.created_at)
+            select(SavedView).where(SavedView.owner_id == owner_id).order_by(SavedView.created_at)
         )
         return (await self.session.execute(stmt)).scalars().all()
 
-    async def get_for_owner(
-        self, view_id: uuid.UUID, owner_id: uuid.UUID
-    ) -> SavedView | None:
+    async def get_for_owner(self, view_id: uuid.UUID, owner_id: uuid.UUID) -> SavedView | None:
         """Scoped by owner in the query itself.
 
         Fetching by id and comparing afterwards would work, but keeping the
         owner in the predicate means no call site can forget the check.
         """
-        stmt = select(SavedView).where(
-            SavedView.id == view_id, SavedView.owner_id == owner_id
-        )
+        stmt = select(SavedView).where(SavedView.id == view_id, SavedView.owner_id == owner_id)
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def delete_for_owner(self, view_id: uuid.UUID, owner_id: uuid.UUID) -> bool:
         """Guarded delete; False means it did not exist *for this owner*."""
-        stmt = delete(SavedView).where(
-            SavedView.id == view_id, SavedView.owner_id == owner_id
-        )
+        stmt = delete(SavedView).where(SavedView.id == view_id, SavedView.owner_id == owner_id)
         result = await self.session.execute(stmt)
         # Same narrowing the ticket repo uses for its guarded updates: only a
         # CursorResult carries rowcount.

@@ -264,9 +264,7 @@ class MetricsRepository:
 
         stmt = (
             select(series.c.bucket_start, func.coalesce(grouped.c.value, 0).label("value"))
-            .select_from(
-                series.outerjoin(grouped, grouped.c.bucket_start == series.c.bucket_start)
-            )
+            .select_from(series.outerjoin(grouped, grouped.c.bucket_start == series.c.bucket_start))
             .order_by(series.c.bucket_start)
         )
 
@@ -317,9 +315,7 @@ class MetricsRepository:
                 AppUser.max_open_tickets,
                 _count_if(Ticket.status == TicketStatus.OPEN).label("open_tickets"),
                 _count_if(Ticket.status == TicketStatus.IN_PROGRESS).label("in_progress"),
-                _count_if(Ticket.status == TicketStatus.PENDING_CUSTOMER).label(
-                    "pending_customer"
-                ),
+                _count_if(Ticket.status == TicketStatus.PENDING_CUSTOMER).label("pending_customer"),
                 _count_if(resolved_in_period).label("resolved_in_period"),
                 _count_if(resolved_in_period & (Ticket.resolved_at <= Ticket.sla_due_at)).label(
                     "sla_met"

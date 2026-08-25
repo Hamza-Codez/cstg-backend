@@ -19,6 +19,7 @@ from tests.api.test_tickets import create_agent, create_customer
 async def test_comment_authorship_inv11(db_session: AsyncSession) -> None:
     """INV-11: Exactly one author column is set on every comment."""
     from app.core.unit_of_work import SqlAlchemyUnitOfWork
+
     uow = SqlAlchemyUnitOfWork(db_session)
     comment_service = CommentService(uow)
 
@@ -39,7 +40,9 @@ async def test_comment_authorship_inv11(db_session: AsyncSession) -> None:
     )
     await db_session.commit()
 
-    customer_principal = Principal(id=customer_id, type=ActorType.CUSTOMER, role=Role.CUSTOMER, is_active=True)
+    customer_principal = Principal(
+        id=customer_id, type=ActorType.CUSTOMER, role=Role.CUSTOMER, is_active=True
+    )
     agent_principal = Principal(id=agent_id, type=ActorType.USER, role=Role.AGENT, is_active=True)
 
     # Customer comment
@@ -123,6 +126,7 @@ async def test_comment_check_constraints_at_db_level(db_session: AsyncSession) -
 async def test_comment_atomicity_with_event(db_session: AsyncSession) -> None:
     """Comment + COMMENT event commit atomically; forced event-insert failure rolls back the comment."""
     from app.core.unit_of_work import SqlAlchemyUnitOfWork
+
     uow = SqlAlchemyUnitOfWork(db_session)
     comment_service = CommentService(uow)
 

@@ -124,6 +124,4 @@ async def set_assignment(
 ) -> ConfigurationResponse:
     """Strategy and the auto-assign switch (docs/API.md §11)."""
     async with service.uow:
-        return await service.set_assignment(
-            principal, data.strategy, data.auto_assign_on_create
-        )
+        return await service.set_assignment(principal, data.strategy, data.auto_assign_on_create)

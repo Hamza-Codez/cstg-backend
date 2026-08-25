@@ -278,8 +278,7 @@ async def test_pending_customer_tickets_count_toward_load(
 
     await db_session.execute(
         text(
-            "UPDATE ticket SET status = 'PENDING_CUSTOMER', sla_paused_at = now() "
-            "WHERE id = :tid"
+            "UPDATE ticket SET status = 'PENDING_CUSTOMER', sla_paused_at = now() WHERE id = :tid"
         ),
         {"tid": tid},
     )

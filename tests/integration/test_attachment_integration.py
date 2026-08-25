@@ -144,9 +144,7 @@ async def test_oversize_upload_leaves_no_row_and_no_bytes(
         async with session_factory() as session:
             service = AttachmentService(SqlAlchemyUnitOfWork(session), storage)
             with pytest.raises(BusinessRuleViolation, match="exceeds the maximum size"):
-                await service.upload_attachment(
-                    principal, ticket_id, _upload(body=b"x" * 5000)
-                )
+                await service.upload_attachment(principal, ticket_id, _upload(body=b"x" * 5000))
 
     rows = (
         (await db_session.execute(select(Attachment).where(Attachment.ticket_id == ticket_id)))

@@ -98,6 +98,8 @@ class Settings(BaseSettings):
         "application/json",
     )
 
+    bulk_max_items: int = 100
+
 
 @lru_cache
 def get_settings() -> Settings:
