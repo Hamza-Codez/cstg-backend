@@ -66,7 +66,7 @@ def migrated_database(postgres_url: str) -> str:
     """
     import subprocess
 
-    env = {**os.environ, "APP_DATABASE_URL": postgres_url}
+    env = {**os.environ, "DATABASE_URL": postgres_url}
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=pathlib.Path(__file__).resolve().parent.parent,

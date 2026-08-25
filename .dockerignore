@@ -1,0 +1,42 @@
+# Keep the build context small and the image clean.
+#
+# Without this every one of these is uploaded to the builder and baked into the
+# image — `.venv` alone is hundreds of megabytes of the WRONG platform's wheels,
+# which `uv sync` then has to work around inside the container.
+
+# Virtualenvs — the image builds its own at /opt/venv.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local state that must never reach a deployed image.
+.env
+.env.*
+!.env.example
+uploads/
+
+# Test and tooling caches.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# VCS and editor noise.
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# Compose is for local development; the image does not need it.
+docker-compose.yml
+docker-compose.*.yml
+
+# Docs and specs do not belong in a runtime image.
+*.md
+spec/
+docs/

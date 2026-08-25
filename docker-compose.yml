@@ -21,7 +21,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APP_DATABASE_URL=postgresql+asyncpg://support:support@db:5432/support
+      - DATABASE_URL=postgresql+asyncpg://support:support@db:5432/support
       - APP_ENV=development
     depends_on:
       db:

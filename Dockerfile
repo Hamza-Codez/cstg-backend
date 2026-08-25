@@ -24,4 +24,15 @@ RUN uv sync --no-dev
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head || echo 'Migration failed, starting anyway'; exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# `${PORT:-8000}`, never a bare 8000. Railway (and Render, Fly, Cloud Run)
+# inject PORT and route the public domain to THAT port; a container listening on
+# a hardcoded 8000 is running perfectly and still unreachable, which the edge
+# reports as "the train has not arrived at the station" — a message that says
+# nothing about ports. The fallback keeps docker-compose, which sets no PORT,
+# working unchanged.
+#
+# `|| echo` and not `&&`, deliberately (rules.md §3): the server starts even
+# when the migration fails, so the failure is reachable at /health/db instead of
+# an opaque 502 with no logs. With `&&` a bad DATABASE_URL means uvicorn never
+# starts at all, and the only symptom is the edge 404 above.
+CMD ["sh", "-c", "alembic upgrade head || echo 'Migration failed, starting anyway'; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

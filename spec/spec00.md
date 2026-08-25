@@ -112,7 +112,7 @@ able to act on it.
 
 ## 4. CORS & Configuration (`rules.md §1`)
 
-`CORSMiddleware` reading `APP_FRONTEND_ORIGIN`:
+`CORSMiddleware` reading `FRONTEND_ORIGIN`:
 
 - **Empty ⇒ no origins allowed.** The default is closed. Under the proxy pattern no browser talks to
   the backend cross-origin, so an empty allow-list is the correct production state; the variable
@@ -207,7 +207,7 @@ and retries.
 `tests/api`
 - `/health` and `/health/db` unauthenticated; `/health/db` 503 with the database down and leaking no
   connection detail.
-- No CORS headers when `APP_FRONTEND_ORIGIN` is unset.
+- No CORS headers when `FRONTEND_ORIGIN` is unset.
 
 ---
 
