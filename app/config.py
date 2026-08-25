@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     storage_backend: Literal["local", "memory"] = "local"
     storage_root: str = "."
 
+    # A truncated export that does not announce the truncation is a wrong
+    # answer, so the cap is a refusal rather than a silent cut (spec09 §6).
+    export_max_rows: int = 50_000
+
     attachment_max_bytes: int = 10 * 1024 * 1024
     # Without a count cap, "customers may upload" is an unbounded disk write for
     # any authenticated account (spec03 §6).

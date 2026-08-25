@@ -1,10 +1,12 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import CursorResult, func, literal, select, tuple_, update
+from sqlalchemy import CursorResult, Row, func, literal, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.clock import now
@@ -13,6 +15,7 @@ from app.domain import sla
 from app.models.customer import Customer
 from app.models.enums import TicketStatus
 from app.models.ticket import Ticket
+from app.models.user import AppUser
 from app.schemas.ticket_filters import TicketFilters
 
 
@@ -32,6 +35,60 @@ class TransitionWrites:
     sla_paused_seconds: int | None = None
     sla_due_at: datetime | None = None
     increment_reopen: bool = False
+
+
+def filter_predicates(filters: TicketFilters) -> list[ColumnElement[bool]]:
+    """Every `GET /tickets` filter as a list of WHERE fragments.
+
+    **Extracted, not duplicated** — the same reasoning as `ticket_scope`. The
+    CSV export promises to return exactly the rows the list endpoint would
+    (spec09 §6), and the only way to keep that promise through later filter
+    changes is for both to build their WHERE clause from this function.
+    """
+    where: list[ColumnElement[bool]] = []
+
+    if filters.q is not None:
+        where.append(
+            Ticket.search_vector.op("@@")(func.websearch_to_tsquery("english", filters.q))
+        )
+    if filters.status is not None:
+        where.append(Ticket.status == filters.status)
+    if filters.priority is not None:
+        where.append(Ticket.priority == filters.priority)
+    if filters.category is not None:
+        where.append(Ticket.category == filters.category)
+    if filters.assigned is not None:
+        # Drives the dispatcher's Unassigned queue (UIUX_FRONTEND.md §7.3.1).
+        where.append(
+            Ticket.assignee_id.is_not(None) if filters.assigned else Ticket.assignee_id.is_(None)
+        )
+    if filters.breached is not None:
+        where.append(
+            Ticket.sla_breached_at.is_not(None)
+            if filters.breached
+            else Ticket.sla_breached_at.is_(None)
+        )
+    if filters.escalated is not None:
+        where.append(
+            Ticket.escalation_level > 0 if filters.escalated else Ticket.escalation_level == 0
+        )
+    if filters.assignee_id is not None:
+        where.append(Ticket.assignee_id == filters.assignee_id)
+    if filters.customer_id is not None:
+        where.append(Ticket.customer_id == filters.customer_id)
+    if filters.tier is not None:
+        # The only filter needing a join; correlated so it composes with the
+        # scope predicate rather than widening the row set.
+        where.append(
+            Ticket.customer_id.in_(select(Customer.id).where(Customer.tier == filters.tier))
+        )
+    # Half-open [after, before) so adjacent ranges neither overlap nor gap.
+    if filters.created_after is not None:
+        where.append(Ticket.created_at >= filters.created_after)
+    if filters.created_before is not None:
+        where.append(Ticket.created_at < filters.created_before)
+
+    return where
 
 
 class TicketRepository:
@@ -210,7 +267,7 @@ class TicketRepository:
         if filters.q is not None:
             query = func.websearch_to_tsquery("english", filters.q)
             rank = func.ts_rank_cd(Ticket.search_vector, query).label("rank")
-            stmt = select(Ticket, rank).where(Ticket.search_vector.op("@@")(query))
+            stmt = select(Ticket, rank)
             stmt = stmt.order_by(rank.desc(), Ticket.created_at.desc(), Ticket.id.desc())
         else:
             stmt = select(Ticket, literal(None)).order_by(
@@ -223,45 +280,7 @@ class TicketRepository:
         elif assignee_id is not None:
             stmt = stmt.where(Ticket.assignee_id == assignee_id)
 
-        # ── Filters ────────────────────────────────────────────────────────────
-        if filters.status is not None:
-            stmt = stmt.where(Ticket.status == filters.status)
-        if filters.priority is not None:
-            stmt = stmt.where(Ticket.priority == filters.priority)
-        if filters.category is not None:
-            stmt = stmt.where(Ticket.category == filters.category)
-        if filters.assigned is not None:
-            # Drives the dispatcher's Unassigned queue (UIUX_FRONTEND.md §7.3.1).
-            stmt = stmt.where(
-                Ticket.assignee_id.is_not(None)
-                if filters.assigned
-                else Ticket.assignee_id.is_(None)
-            )
-        if filters.breached is not None:
-            stmt = stmt.where(
-                Ticket.sla_breached_at.is_not(None)
-                if filters.breached
-                else Ticket.sla_breached_at.is_(None)
-            )
-        if filters.escalated is not None:
-            stmt = stmt.where(
-                Ticket.escalation_level > 0 if filters.escalated else Ticket.escalation_level == 0
-            )
-        if filters.assignee_id is not None:
-            stmt = stmt.where(Ticket.assignee_id == filters.assignee_id)
-        if filters.customer_id is not None:
-            stmt = stmt.where(Ticket.customer_id == filters.customer_id)
-        if filters.tier is not None:
-            # The only filter needing a join; correlated so it composes with the
-            # scope predicate rather than widening the row set.
-            stmt = stmt.where(
-                Ticket.customer_id.in_(select(Customer.id).where(Customer.tier == filters.tier))
-            )
-        # Half-open [after, before) so adjacent ranges neither overlap nor gap.
-        if filters.created_after is not None:
-            stmt = stmt.where(Ticket.created_at >= filters.created_after)
-        if filters.created_before is not None:
-            stmt = stmt.where(Ticket.created_at < filters.created_before)
+        stmt = stmt.where(*filter_predicates(filters))
 
         # ── Keyset ─────────────────────────────────────────────────────────────
         if cursor is not None:
@@ -287,3 +306,70 @@ class TicketRepository:
         stmt = stmt.limit(limit)
         rows = (await self.session.execute(stmt)).all()
         return [(row[0], row[1]) for row in rows]
+
+    async def count_matching(
+        self,
+        *,
+        scope: ColumnElement[bool],
+        filters: TicketFilters | None = None,
+    ) -> int:
+        """How many rows an export would produce, asked before producing any.
+
+        Streaming means the response has already started by the time the row
+        cap would be hit, and a truncated file that does not say it is truncated
+        is a wrong answer (spec09 §6). So the cap is enforced up front, with a
+        COUNT the same predicates drive.
+        """
+        stmt = (
+            select(func.count(Ticket.id))
+            .where(scope)
+            .where(*filter_predicates(filters or TicketFilters()))
+        )
+        return int((await self.session.execute(stmt)).scalar_one())
+
+    async def stream_for_export(
+        self,
+        *,
+        scope: ColumnElement[bool],
+        filters: TicketFilters | None = None,
+        chunk_size: int = 1000,
+    ) -> AsyncIterator[Row[Any]]:
+        """Server-side cursor over the export columns.
+
+        `yield_per` keeps PostgreSQL streaming rather than buffering the whole
+        result: this process also hosts the SLA monitor, and materialising 100k
+        rows would stall breach detection (spec09 §6).
+
+        **No body, no comments.** The export is operational data; bodies carry
+        whatever a customer pasted into them.
+        """
+        assignee = aliased(AppUser)
+        stmt = (
+            select(
+                Ticket.id,
+                Customer.name.label("customer_name"),
+                Customer.tier,
+                Ticket.subject,
+                Ticket.category,
+                Ticket.priority,
+                Ticket.status,
+                assignee.name.label("assignee_name"),
+                Ticket.created_at,
+                Ticket.deadline,
+                Ticket.sla_due_at,
+                Ticket.sla_paused_seconds,
+                Ticket.resolved_at,
+                Ticket.sla_breached_at,
+                Ticket.escalation_level,
+                Ticket.reopen_count,
+            )
+            .join(Customer, Customer.id == Ticket.customer_id)
+            .outerjoin(assignee, assignee.id == Ticket.assignee_id)
+            .where(scope)
+            .where(*filter_predicates(filters or TicketFilters()))
+            .order_by(Ticket.created_at.desc(), Ticket.id.desc())
+            .execution_options(yield_per=chunk_size)
+        )
+        result = await self.session.stream(stmt)
+        async for row in result:
+            yield row

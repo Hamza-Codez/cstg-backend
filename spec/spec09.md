@@ -154,7 +154,8 @@ CREATE INDEX ix_ticket_resolved_at ON ticket (resolved_at) WHERE resolved_at IS 
 CREATE INDEX ix_ticket_breached_at ON ticket (sla_breached_at) WHERE sla_breached_at IS NOT NULL;
 ```
 
-**Migration `0017_metrics_indexes`.**
+**Migration `0018_metrics_indexes`.** (Renumbered at implementation: `0017` was taken by the
+notification cursor in spec08.)
 
 **No materialized views, no caching.** Both are the documented answer if these queries ever get slow
 at real volume — and `docs/ARCHITECTURE.md §6` sets the precedent for that posture: measure first,
@@ -189,6 +190,39 @@ second background task for a problem that does not exist yet.
 
 ## 9. Definition of Done
 
-`0016` applies; every aggregate uses `sla_due_at` and pause-corrected working time; empty buckets are
+`0018` applies; every aggregate uses `sla_due_at` and pause-corrected working time; empty buckets are
 present as zeros; the export streams, caps, and escapes; the per-agent attribution simplification is
 documented in the API response description, not only in this file.
+
+---
+
+## 10. As Built
+
+Deltas between this spec and the shipped code, recorded so the next reader
+trusts the file:
+
+- **Migration is `0018_metrics_indexes`**, not `0017` — that number went to the
+  notification cursor. Both partial indexes are as written here.
+- **`from`/`to` are `range_from`/`range_to` in the response body.** `from` is a
+  Python keyword, so it cannot be a Pydantic field name. The *query* parameters
+  are still `?from=&to=` as specified, via `Query(alias=...)`.
+- **A malformed `metric` or `bucket` is 400, not 422.** They are constrained by
+  `Literal`, so an unknown value is a `ValidationError` — a malformed request.
+  422 stays reserved for a well-formed request that breaks a business rule,
+  which is what the 366-bucket cap is. The taxonomy in `docs/API.md` decides
+  this, not this file.
+- **`current_load_pct` is `null`, never `0.0`, for an agent with no ceiling.**
+  A bar chart renders 0.0 as idle, which is a lie about an uncapped agent
+  holding forty tickets. Uncapped is not unloaded.
+- **The month divisor for the bucket cap is 28 days.** A month is not a fixed
+  span; the conservative divisor can only refuse a borderline range, never
+  admit one that is genuinely too long.
+- **`filter_predicates` was extracted from `TicketRepository.list_scoped`**, and
+  the export and the list endpoint both build their WHERE clause from it. §6
+  promises the export returns exactly the rows the list would; shared code is
+  the only way that survives a later filter change.
+- **The export cap is checked with a COUNT before the first byte is yielded.**
+  Once a `StreamingResponse` has begun there is no turning it back into a 422.
+- **`escape_field` strips leading whitespace before testing for a prefix.** Some
+  spreadsheets do the same before deciding a cell is a formula, so a raw
+  `startswith` would let ` =SUM(A1)` through.
