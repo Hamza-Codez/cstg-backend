@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.assignment_repo import AssignmentRepository
 from app.repositories.attachment_repo import AttachmentRepository
 from app.repositories.comment_repo import CommentRepository
 from app.repositories.customer_repo import CustomerRepository
@@ -32,6 +33,7 @@ class SqlAlchemyUnitOfWork:
         self.attachments = AttachmentRepository(session)
         self.saved_views = SavedViewRepository(session)
         self.sla_policies = SlaPolicyRepository(session)
+        self.assignment = AssignmentRepository(session)
 
     async def flush(self) -> None:
         """Push pending writes without committing.

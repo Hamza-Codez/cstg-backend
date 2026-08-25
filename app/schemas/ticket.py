@@ -85,3 +85,7 @@ class TransitionRequest(BaseModel):
 
 class AssignmentRequest(BaseModel):
     assignee_id: uuid.UUID
+    #: Capacity is a routing heuristic, not an invariant — a dispatcher handling
+    #: a CRITICAL outage must be able to say "anyway" (spec07 §6). Recorded in
+    #: the ASSIGNMENT event's detail.
+    override_capacity: bool = False

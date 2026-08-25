@@ -110,9 +110,19 @@ async def db_session(
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE"))
         await _seed_active_sla_policy(conn)
+        await _seed_assignment_config(conn)
 
     async with session_factory() as session:
         yield session
+
+
+async def _seed_assignment_config(conn: AsyncConnection) -> None:
+    """Restore the singleton the TRUNCATE removed (P18).
+
+    Seeded MANUAL / auto-assign off, exactly as migration 0016 ships it, so the
+    default test behaviour matches production before an admin opts in.
+    """
+    await conn.execute(text("INSERT INTO assignment_config (id) VALUES (true)"))
 
 
 async def _seed_active_sla_policy(conn: AsyncConnection) -> None:

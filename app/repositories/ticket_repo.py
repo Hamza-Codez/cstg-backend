@@ -116,6 +116,26 @@ class TicketRepository:
         assert isinstance(result, CursorResult)
         return result.rowcount == 1
 
+    async def claim_if_unassigned(self, ticket_id: uuid.UUID, assignee_id: uuid.UUID) -> bool:
+        """Guarded self-assignment (spec07 §4).
+
+        `assignee_id IS NULL` is what makes claiming *taking* rather than
+        reassigning: two agents scanning the same queue race, one wins, and the
+        loser gets a 409 that says someone beat them to it.
+        """
+        stmt = (
+            update(Ticket)
+            .where(
+                Ticket.id == ticket_id,
+                Ticket.assignee_id.is_(None),
+                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.IN_PROGRESS]),
+            )
+            .values(assignee_id=assignee_id, updated_at=now())
+        )
+        result = await self.session.execute(stmt)
+        assert isinstance(result, CursorResult)
+        return result.rowcount == 1
+
     async def get_breach_candidates(self, current_time: datetime) -> Sequence[Ticket]:
         """Tickets past their effective due time and not yet escalated.
 

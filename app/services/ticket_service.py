@@ -90,6 +90,19 @@ class TicketService:
         self.uow.tickets.insert(ticket)
         self.uow.events.insert(event)
 
+        # 7. Route it, if automation is on. Same transaction as the insert, so a
+        #    ticket is never briefly visible unassigned and a routing failure
+        #    cannot leave a half-created ticket.
+        #
+        #    No eligible agent is a NORMAL outcome: the ticket stays unassigned,
+        #    no ASSIGNMENT event is written, and creation still succeeds.
+        config = await self.uow.assignment.config()
+        if config is not None and config.auto_assign_on_create:
+            from app.services.assignment_service import AssignmentService
+
+            await self.uow.flush()
+            await AssignmentService(self.uow).auto_assign(ticket.id)
+
         return ticket
 
     async def get_ticket(self, principal: Principal, ticket_id: uuid.UUID) -> Ticket | None:

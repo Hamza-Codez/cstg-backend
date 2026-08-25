@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,11 +37,19 @@ class SlaPolicyVersionSummary(SlaPolicySummary):
     is_active: bool
 
 
+class AssignmentSettings(BaseModel):
+    """How new tickets are routed (spec07 §6)."""
+
+    strategy: Literal["MANUAL", "ROUND_ROBIN", "LEAST_LOADED"]
+    auto_assign_on_create: bool
+
+
 class ConfigurationResponse(BaseModel):
     priority_rules: list[PriorityRuleEntry]
     #: Retained for compatibility: the active policy's durations, flat.
     sla_durations: list[SlaDurationEntry]
     sla_policy: SlaPolicySummary
+    assignment: AssignmentSettings
 
 
 class SlaPolicyUpdate(BaseModel):

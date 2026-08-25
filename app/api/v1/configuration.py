@@ -15,6 +15,7 @@ from app.core.authorization import Principal, require_roles
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.enums import Role
 from app.schemas.configuration import (
+    AssignmentSettings,
     ConfigurationResponse,
     PriorityMatrixUpdate,
     SlaDurationEntry,
@@ -113,3 +114,16 @@ async def sla_policy_history(
             for v in versions
         ]
     }
+
+
+@router.put("/assignment", response_model=ConfigurationResponse)
+async def set_assignment(
+    data: AssignmentSettings,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    service: Annotated[ConfigurationService, Depends(get_configuration_service)],
+) -> ConfigurationResponse:
+    """Strategy and the auto-assign switch (docs/API.md §11)."""
+    async with service.uow:
+        return await service.set_assignment(
+            principal, data.strategy, data.auto_assign_on_create
+        )

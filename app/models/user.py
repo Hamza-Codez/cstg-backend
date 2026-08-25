@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import CITEXT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,13 @@ class AppUser(Base, UUIDMixin):
     name: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[Role] = mapped_column(nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    #: None means no ceiling — the v1 behaviour.
+    max_open_tickets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Lets an agent stay assignable by a dispatcher while automation skips
+    #: them (part-time, another rotation, on leave).
+    accepts_auto_assignment: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=clock.now, nullable=False
     )

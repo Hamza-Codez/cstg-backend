@@ -19,6 +19,10 @@ class UserSummary(BaseModel):
     name: str
     email: EmailStr
     role: Role
+    #: Workload, so the picker can show it and grey out full agents (spec07 §6).
+    open_ticket_count: int = 0
+    max_open_tickets: int | None = None
+    accepts_auto_assignment: bool = True
     is_active: bool
 
 
@@ -41,6 +45,11 @@ class UserUpdate(BaseModel):
 
     Deactivating never removes them: existing tickets keep naming their owner, and
     the audit trail must stay readable. It only stops new assignments (INV-8).
+
+    All fields optional so a PATCH can change one without restating the rest.
     """
 
-    is_active: bool
+    is_active: bool | None = None
+    #: None clears the ceiling; the field being absent leaves it unchanged.
+    max_open_tickets: int | None = Field(default=None, ge=1)
+    accepts_auto_assignment: bool | None = None

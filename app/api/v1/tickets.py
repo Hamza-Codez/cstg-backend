@@ -186,6 +186,29 @@ async def get_ticket(
 
 
 @router.post(
+    "/{ticket_id}/claim",
+    response_model=TicketResponse,
+    # Agents claim; dispatchers assign, which they can already do to anyone
+    # including themselves. Adding claim for them would be a second spelling of
+    # an existing capability (spec07 §7).
+    dependencies=[Depends(require_roles(Role.AGENT, Role.ADMIN))],
+)
+async def claim_ticket(
+    ticket_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    service: Annotated[AssignmentService, Depends(get_assignment_service)],
+) -> TicketResponse:
+    """An agent takes an unassigned ticket (docs/API.md §6).
+
+    409 when someone else got there first — the normal outcome of two agents
+    scanning the same queue, not a fault.
+    """
+    async with service.uow:
+        ticket = await service.claim_ticket(principal, ticket_id)
+    return TicketResponse.model_validate(ticket, from_attributes=True)
+
+
+@router.post(
     "/{ticket_id}/transitions",
     response_model=TicketResponse,
     # Coarse gate admits every authenticated role from P16: customers drive T5
@@ -219,7 +242,12 @@ async def assign_ticket(
     service: Annotated[AssignmentService, Depends(get_assignment_service)],
 ) -> TicketResponse:
     async with service.uow:
-        ticket = await service.assign_ticket(principal, ticket_id, data.assignee_id)
+        ticket = await service.assign_ticket(
+            principal,
+            ticket_id,
+            data.assignee_id,
+            override_capacity=data.override_capacity,
+        )
     return TicketResponse.model_validate(ticket, from_attributes=True)
 
 

@@ -1,3 +1,4 @@
+from .assignment_config import AssignmentConfig
 from .attachment import Attachment
 from .base import Base
 from .comment import Comment
@@ -29,6 +30,7 @@ __all__ = [
     "PriorityRule",
     "SlaPolicyEntry",
     "SlaPolicyVersion",
+    "AssignmentConfig",
     "Attachment",
     "TicketStatus",
     "Priority",
