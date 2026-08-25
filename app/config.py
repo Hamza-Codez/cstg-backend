@@ -1,5 +1,6 @@
 """Application settings. Values come from the environment with the ``APP_`` prefix."""
 
+import logging
 from functools import lru_cache
 from typing import Literal
 
@@ -12,6 +13,11 @@ DEV_SECRET_KEY = "unsafe-dummy-secret-key-for-local-dev"
 
 MIN_SECRET_KEY_LENGTH = 32
 
+#: The local-development database. Like DEV_SECRET_KEY, it doubles as a sentinel
+#: for "not configured": a production process pointed here is misconfigured, not
+#: unlucky.
+LOCAL_DATABASE_URL = "postgresql+asyncpg://support:support@localhost:5432/support"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -22,11 +28,19 @@ class Settings(BaseSettings):
     )
 
     env: Literal["development", "test", "production"] = "development"
+    #: `alias` deliberately BYPASSES `env_prefix`, so this reads `DATABASE_URL`
+    #: and NOT `APP_DATABASE_URL` — matching rules.md §1 and letting Railway's
+    #: `${{Postgres.DATABASE_URL}}` reference be pasted in unchanged.
+    #:
+    #: The trap this creates is worth knowing: setting `APP_DATABASE_URL` is
+    #: silently ignored, and the default below then points production at
+    #: localhost. `_reject_local_database_in_production` exists to catch that.
     database_url: str = Field(
-        "postgresql+asyncpg://support:support@localhost:5432/support",
+        LOCAL_DATABASE_URL,
         alias="DATABASE_URL",
     )
-    frontend_origin: str = ""
+    #: Likewise unprefixed: `FRONTEND_ORIGIN`, not `APP_FRONTEND_ORIGIN`.
+    frontend_origin: str = Field("", alias="FRONTEND_ORIGIN")
 
     @model_validator(mode="after")
     def _normalize_database_url(self) -> "Settings":
@@ -69,6 +83,32 @@ class Settings(BaseSettings):
             )
         if len(self.secret_key) < MIN_SECRET_KEY_LENGTH:
             raise ValueError(f"APP_SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters.")
+        return self
+
+    @model_validator(mode="after")
+    def _warn_on_local_database_in_production(self) -> "Settings":
+        """Say so, loudly, when production is still pointed at localhost.
+
+        Deliberately a log line and not a raise: rules.md §3 wants the server to
+        start even when the database is unreachable, so the failure surfaces at
+        `/health/db` rather than as an opaque 502 with no logs.
+
+        But silence was worse. A `DATABASE_URL` that never arrived — because it
+        was set as `APP_DATABASE_URL`, which the alias above makes pydantic
+        ignore — falls back to this default and produces
+        `Connect call failed ('127.0.0.1', 5432)` deep in an asyncpg traceback,
+        which names neither the variable nor the mistake. This turns hours of
+        that into one line.
+        """
+        if self.env == "production" and self.database_url == LOCAL_DATABASE_URL:
+            logging.getLogger(__name__).error(
+                "DATABASE_URL is unset in production, so this process is pointed at "
+                "localhost and every query will fail. Note the name: DATABASE_URL, "
+                "NOT APP_DATABASE_URL — this field is aliased, so the APP_ prefix "
+                "does not apply and a prefixed value is ignored silently. "
+                "On Railway, ${{Postgres.DATABASE_URL}} can be pasted in as-is; the "
+                "postgresql:// scheme is converted to asyncpg automatically.",
+            )
         return self
 
     # Attachment limits (docs/API.md §8 requires max size + allowed content types).
