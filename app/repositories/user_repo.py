@@ -49,3 +49,38 @@ class UserRepository:
     def insert(self, user: AppUser) -> None:
         """Stage a new staff member; the caller's unit of work commits it."""
         self.session.add(user)
+
+    async def footprint(self, user_id: uuid.UUID) -> dict[str, int]:
+        """What this person has touched, by table.
+
+        Deletion is only safe for a staff row that never acted. `ticket_event`
+        is the reason: `actor_id` there carries NO foreign key — it points into
+        `app_user` or `customer` depending on `actor_type` — so the database
+        would let the row go and leave every event they authored pointing at an
+        id that resolves to nobody. The audit log would still list the actions
+        and silently lose who took them.
+
+        Counted here rather than trusted to foreign keys, because only three of
+        the five references are enforced and none of them covers that one.
+        """
+        from sqlalchemy import func
+
+        from app.models.comment import Comment
+        from app.models.sla_policy import SlaPolicyVersion
+        from app.models.ticket import Ticket
+        from app.models.ticket_event import TicketEvent
+
+        async def count(column: object, value: uuid.UUID) -> int:
+            stmt = select(func.count()).where(column == value)  # type: ignore[arg-type]
+            return int((await self.session.execute(stmt)).scalar_one())
+
+        return {
+            "tickets": await count(Ticket.assignee_id, user_id),
+            "comments": await count(Comment.author_user_id, user_id),
+            "events": await count(TicketEvent.actor_id, user_id),
+            "sla_policies": await count(SlaPolicyVersion.created_by, user_id),
+        }
+
+    async def delete(self, user: AppUser) -> None:
+        """Remove the row outright. Saved views cascade; nothing else may exist."""
+        await self.session.delete(user)

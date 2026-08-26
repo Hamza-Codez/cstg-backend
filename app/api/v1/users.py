@@ -8,11 +8,11 @@ to DISPATCHER and ADMIN. Creating and activating/deactivating staff is admin-onl
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal, get_db
-from app.core.authorization import require_roles
+from app.core.authorization import Principal, require_roles
 from app.core.unit_of_work import SqlAlchemyUnitOfWork
 from app.models.enums import Role
 from app.repositories.assignment_repo import AssignmentRepository
@@ -93,3 +93,30 @@ async def update_user(
     async with service.uow:
         user = await service.update_staff(user_id, data)
     return UserSummary.model_validate(user, from_attributes=True)
+
+
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles(Role.ADMIN))],
+)
+async def delete_user(
+    user_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    service: Annotated[UserService, Depends(get_user_service)],
+) -> Response:
+    """Delete a staff row that has never been used.
+
+    **Not the counterpart of deactivation.** Deactivating keeps someone's
+    history and stops them receiving new work — the right answer for a person
+    who has left. This is for the row created by a typo, and refuses (422)
+    anyone who has held a ticket, written a comment, published an SLA policy or
+    authored a single audit event, naming what they touched.
+
+    That check is the only thing protecting the audit log: `ticket_event`
+    carries no foreign key to `app_user`, so the database would happily delete
+    the row and leave every event they authored attributed to nobody.
+    """
+    async with service.uow:
+        await service.delete_staff(principal.id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

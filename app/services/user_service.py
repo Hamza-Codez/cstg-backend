@@ -55,3 +55,39 @@ class UserService:
         if "accepts_auto_assignment" in fields and fields["accepts_auto_assignment"] is not None:
             user.accepts_auto_assignment = fields["accepts_auto_assignment"]
         return user
+
+    async def delete_staff(self, actor_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Delete a staff row that has never been used.
+
+        **Deletion is not the counterpart of deactivation.** Deactivating keeps
+        the person's history intact and stops them receiving new work; that is
+        the right answer for someone who has left. Deleting is for the row
+        created by a typo five minutes ago — and only that.
+
+        Anyone who has held a ticket, written a comment, published an SLA policy
+        or authored a single audit event is refused, because removing them would
+        leave those records attributed to an id that resolves to nobody.
+        `ticket_event.actor_id` has no foreign key, so the database will not
+        stop this; the check has to.
+        """
+        if actor_id == user_id:
+            # Not a rule about data, a rule about lockout: an admin deleting
+            # their own row loses the session and, if they were the last admin,
+            # the only way back in.
+            raise BusinessRuleViolation("You cannot delete your own account.")
+
+        user = await self.uow.users.get(user_id)
+        if user is None:
+            raise NotFound("That staff member could not be found.")
+
+        footprint = await self.uow.users.footprint(user_id)
+        used = {name: n for name, n in footprint.items() if n > 0}
+        if used:
+            detail = ", ".join(f"{n} {name.replace('_', ' ')}" for name, n in sorted(used.items()))
+            raise BusinessRuleViolation(
+                f"{user.name} has already worked in the system ({detail}), so deleting them "
+                "would leave that history attributed to nobody. Deactivate them instead — "
+                "they stop receiving new work and their record stays intact."
+            )
+
+        await self.uow.users.delete(user)
